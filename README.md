@@ -89,43 +89,47 @@ Includes an **interactive web dashboard**, Swagger & ReDoc OpenAPI documentation
 ```
 bulk-certificate-generator/
 │
-├── app/
-│   ├── __init__.py
-│   ├── main.py                     # FastAPI application setup, CORS, lifespan & Dashboard UI
-│   ├── database.py                 # SQLite engine, session maker, get_db dependency
-│   ├── models.py                   # SQLAlchemy ORM models (GenerationJob, CertificateRecord)
-│   ├── schemas.py                  # Pydantic request, response, and validation schemas
-│   │
-│   ├── routers/
+├── backend/
+│   ├── app/
 │   │   ├── __init__.py
-│   │   └── certificates.py         # REST endpoints (batch generate, CSV upload, status, download, verify)
+│   │   ├── main.py                     # FastAPI application setup, CORS, lifespan & Dashboard UI
+│   │   ├── database.py                 # SQLite engine, session maker, get_db dependency
+│   │   ├── models.py                   # SQLAlchemy ORM models (GenerationJob, CertificateRecord)
+│   │   ├── schemas.py                  # Pydantic request, response, and validation schemas
+│   │   │
+│   │   ├── routers/
+│   │   │   ├── __init__.py
+│   │   │   └── certificates.py         # REST endpoints (batch generate, CSV upload, status, download, verify)
+│   │   │
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── certificate_generator.py # ReportLab PDF vector rendering engine
+│   │   │   └── job_processor.py        # Asynchronous job worker & ZIP bundler
+│   │   │
+│   │   └── utils/
+│   │       ├── __init__.py
+│   │       └── validators.py           # Email, recipient name, course, and date validators
 │   │
-│   ├── services/
+│   ├── templates/
+│   │   └── certificate_template.pdf    # Baseline certificate sample template
+│   │
+│   ├── generated/                      # Target storage for job folders, PDFs, and ZIP bundles
+│   │   └── .gitkeep
+│   │
+│   ├── tests/
 │   │   ├── __init__.py
-│   │   ├── certificate_generator.py # ReportLab PDF vector rendering engine
-│   │   └── job_processor.py        # Asynchronous job worker & ZIP bundler
+│   │   ├── conftest.py                 # Shared test client and isolated SQLite database fixture
+│   │   ├── test_jobs.py                # Job creation, background execution, and CSV upload tests
+│   │   ├── test_validation.py          # Data validation & Pydantic schema tests
+│   │   ├── test_generation.py          # ReportLab PDF creation and verification code tests
+│   │   └── test_retrieval.py           # PDF download, ZIP download, and verification endpoint tests
 │   │
-│   └── utils/
-│       ├── __init__.py
-│       └── validators.py           # Email, recipient name, course, and date validators
+│   └── requirements.txt                # Backend dependencies
 │
-├── templates/
-│   └── certificate_template.pdf    # Baseline certificate sample template
-│
-├── generated/                      # Target storage for job folders, PDFs, and ZIP bundles
-│   └── .gitkeep
-│
-├── tests/
-│   ├── __init__.py
-│   ├── conftest.py                 # Shared test client and isolated SQLite database fixture
-│   ├── test_jobs.py                # Job creation, background execution, and CSV upload tests
-│   ├── test_validation.py          # Data validation & Pydantic schema tests
-│   ├── test_generation.py          # ReportLab PDF creation and verification code tests
-│   └── test_retrieval.py           # PDF download, ZIP download, and verification endpoint tests
-│
-├── requirements.txt                # Production and development dependencies
-├── .gitignore                      # Git ignore rules for virtualenv, PDFs, and caches
-└── README.md                       # Complete documentation and setup guide
+├── frontend/                           # Reserved for dedicated frontend apps
+├── requirements.txt                    # Root-level requirements file
+├── .gitignore                          # Git ignore rules for virtualenv, PDFs, and caches
+└── README.md                           # Complete documentation and setup guide
 ```
 
 ---

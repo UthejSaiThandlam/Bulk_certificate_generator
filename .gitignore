@@ -35,6 +35,8 @@ htmlcov/
 *.db
 generated/*
 !generated/.gitkeep
+backend/generated/*
+!backend/generated/.gitkeep
 
 # IDE & Editor
 .vscode/

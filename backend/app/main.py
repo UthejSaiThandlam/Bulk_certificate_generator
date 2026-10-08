@@ -12,9 +12,10 @@ from app.routers import certificates
 async def lifespan(app: FastAPI):
     # Ensure database tables exist
     Base.metadata.create_all(bind=engine)
-    # Ensure generated directory exists
-    os.makedirs("generated", exist_ok=True)
-    os.makedirs("templates", exist_ok=True)
+    # Ensure generated and templates directories exist
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    os.makedirs(os.path.join(base_dir, "generated"), exist_ok=True)
+    os.makedirs(os.path.join(base_dir, "templates"), exist_ok=True)
     yield
 
 

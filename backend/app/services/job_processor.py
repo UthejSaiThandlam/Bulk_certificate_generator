@@ -24,7 +24,8 @@ def process_bulk_generation_job(job_id: str) -> None:
         db.commit()
 
         # Target directory for this job's certificates
-        job_dir = os.path.abspath(os.path.join("generated", job_id))
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        job_dir = os.path.abspath(os.path.join(base_dir, "generated", job_id))
         os.makedirs(job_dir, exist_ok=True)
 
         certificates = db.query(CertificateRecord).filter(CertificateRecord.job_id == job_id).all()
