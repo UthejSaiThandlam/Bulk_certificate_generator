@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
-from app.database import engine, Base
+from app.database import engine, Base, ensure_schema_compatibility
 from app.routers import certificates
 from app.services.certificate_generator import CertificateGenerator
 from app.services.job_processor import resume_interrupted_jobs
@@ -12,8 +12,9 @@ from app.services.job_processor import resume_interrupted_jobs
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Ensure database tables exist
+    # Ensure database tables exist & automatically migrate any missing columns
     Base.metadata.create_all(bind=engine)
+    ensure_schema_compatibility(engine)
     # Ensure generated and templates directories exist
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     templates_dir = os.path.join(base_dir, "templates")
