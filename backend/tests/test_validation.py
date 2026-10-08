@@ -6,7 +6,7 @@ from app.utils.validators import (
     validate_course_name,
     validate_date_string,
 )
-from app.schemas import RecipientCreate, GenerateCertificatesRequest
+from app.schemas import RecipientCreate, GenerateCertificatesRequest, MAX_RECIPIENTS_LIMIT
 
 
 def test_validate_email_success():
@@ -76,3 +76,14 @@ def test_recipient_schema_invalid():
 def test_generate_request_empty_recipients():
     with pytest.raises(ValidationError):
         GenerateCertificatesRequest(recipients=[])
+
+
+def test_generate_request_exceeds_max_limit():
+    dummy = RecipientCreate(
+        recipient_name="Test User",
+        recipient_email="test@example.com",
+        course_name="Test Course",
+    )
+    oversized_list = [dummy] * (MAX_RECIPIENTS_LIMIT + 1)
+    with pytest.raises(ValidationError, match="Exceeded maximum recipient limit"):
+        GenerateCertificatesRequest(recipients=oversized_list)

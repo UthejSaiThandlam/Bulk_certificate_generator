@@ -9,6 +9,8 @@ from app.utils.validators import (
     validate_recipient_name,
 )
 
+MAX_RECIPIENTS_LIMIT = 5000
+
 
 class RecipientCreate(BaseModel):
     recipient_name: str = Field(..., description="Full name of the certificate recipient", examples=["Alice Johnson"])
@@ -39,9 +41,20 @@ class RecipientCreate(BaseModel):
 
 
 class GenerateCertificatesRequest(BaseModel):
-    template_name: Optional[str] = Field(default="classic", description="Certificate design template (classic, modern, elegant)")
+    template_name: Optional[str] = Field(default="classic", description="Certificate design template (classic, modern)")
     issuer_name: Optional[str] = Field(default="Academic Certification Authority", description="Name of the issuing organization")
+    idempotency_key: Optional[str] = Field(default=None, description="Optional client idempotency key to prevent duplicate jobs")
+    deduplicate_by_email: bool = Field(default=True, description="Whether to automatically deduplicate recipients with identical emails within the job")
     recipients: List[RecipientCreate] = Field(..., min_length=1, description="List of recipient details for certificate generation")
+
+    @field_validator("recipients")
+    @classmethod
+    def check_recipients_limit(cls, v: List[RecipientCreate]) -> List[RecipientCreate]:
+        if not v:
+            raise ValueError("Recipients list cannot be empty")
+        if len(v) > MAX_RECIPIENTS_LIMIT:
+            raise ValueError(f"Exceeded maximum recipient limit of {MAX_RECIPIENTS_LIMIT} per job. Received: {len(v)}")
+        return v
 
 
 class CertificateResponse(BaseModel):
@@ -55,6 +68,7 @@ class CertificateResponse(BaseModel):
     issuer_name: str
     status: str
     download_url: Optional[str] = None
+    error_message: Optional[str] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -62,12 +76,15 @@ class CertificateResponse(BaseModel):
 
 class JobResponse(BaseModel):
     id: str
+    idempotency_key: Optional[str] = None
     template_name: str
     status: str
-    total_count: int
-    processed_count: int
-    failed_count: int
+    total: int
+    completed: int
+    successful: int
+    failed: int
     progress_percentage: float = 0.0
+    recommended_polling_interval_seconds: int = 2
     download_zip_url: Optional[str] = None
     error_message: Optional[str] = None
     created_at: datetime

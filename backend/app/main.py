@@ -6,6 +6,8 @@ from fastapi.responses import HTMLResponse
 
 from app.database import engine, Base
 from app.routers import certificates
+from app.services.certificate_generator import CertificateGenerator
+from app.services.job_processor import resume_interrupted_jobs
 
 
 @asynccontextmanager
@@ -14,8 +16,17 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     # Ensure generated and templates directories exist
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    os.makedirs(os.path.join(base_dir, "generated"), exist_ok=True)
-    os.makedirs(os.path.join(base_dir, "templates"), exist_ok=True)
+    templates_dir = os.path.join(base_dir, "templates")
+    generated_dir = os.path.join(base_dir, "generated")
+    os.makedirs(generated_dir, exist_ok=True)
+    os.makedirs(templates_dir, exist_ok=True)
+
+    # 1. Startup validation: fail fast if ReportLab / template is broken
+    CertificateGenerator.validate_template_at_startup(templates_dir)
+
+    # 2. Crash recovery: resume any jobs interrupted if server restarted unexpectedly
+    resume_interrupted_jobs()
+
     yield
 
 

@@ -14,10 +14,13 @@ class JobStatus:
     PENDING = "PENDING"
     PROCESSING = "PROCESSING"
     COMPLETED = "COMPLETED"
+    COMPLETED_WITH_ERRORS = "COMPLETED_WITH_ERRORS"
     FAILED = "FAILED"
 
 
 class CertificateStatus:
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
     SUCCESS = "SUCCESS"
     FAILED = "FAILED"
 
@@ -26,11 +29,12 @@ class GenerationJob(Base):
     __tablename__ = "generation_jobs"
 
     id = Column(String(36), primary_key=True, default=generate_uuid, index=True)
-    template_name = Column(String(100), default="default", nullable=False)
-    status = Column(String(20), default=JobStatus.PENDING, nullable=False, index=True)
-    total_count = Column(Integer, default=0, nullable=False)
-    processed_count = Column(Integer, default=0, nullable=False)
-    failed_count = Column(Integer, default=0, nullable=False)
+    idempotency_key = Column(String(100), unique=True, index=True, nullable=True)
+    template_name = Column(String(100), default="classic", nullable=False)
+    status = Column(String(30), default=JobStatus.PENDING, nullable=False, index=True)
+    total = Column(Integer, default=0, nullable=False)
+    successful = Column(Integer, default=0, nullable=False)
+    failed = Column(Integer, default=0, nullable=False)
     zip_file_path = Column(String(500), nullable=True)
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
@@ -50,14 +54,15 @@ class CertificateRecord(Base):
     id = Column(String(36), primary_key=True, default=generate_uuid, index=True)
     job_id = Column(String(36), ForeignKey("generation_jobs.id"), nullable=False, index=True)
     certificate_code = Column(String(50), unique=True, index=True, nullable=False)
-    recipient_name = Column(String(150), nullable=False)
-    recipient_email = Column(String(150), nullable=False)
+    recipient_name = Column(String(200), nullable=False)
+    recipient_email = Column(String(150), nullable=False, index=True)
     course_name = Column(String(200), nullable=False)
     issue_date = Column(String(50), nullable=False)
     issuer_name = Column(String(150), default="Academic Certification Authority", nullable=False)
-    status = Column(String(20), default=CertificateStatus.SUCCESS, nullable=False)
+    status = Column(String(20), default=CertificateStatus.PENDING, nullable=False, index=True)
     file_path = Column(String(500), nullable=True)
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 
     job = relationship("GenerationJob", back_populates="certificates")

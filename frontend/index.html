@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CertifAI — Enterprise Bulk Certificate Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="glow-bg"></div>
+
+  <div class="app-container">
+    <!-- Navbar -->
+    <header class="navbar">
+      <div class="brand">
+        <div class="brand-icon">🎓</div>
+        <div class="brand-text">
+          <h1>CertifAI</h1>
+          <span class="brand-subtitle">Bulk Certificate Generator &amp; Verification Engine</span>
+        </div>
+      </div>
+      <div class="nav-actions">
+        <div id="backendStatus" class="status-pill status-checking">
+          <span class="status-dot"></span>
+          <span id="backendStatusText">Connecting to API...</span>
+        </div>
+        <a href="http://127.0.0.1:8000/docs" target="_blank" class="nav-link">Swagger Docs</a>
+        <a href="http://127.0.0.1:8000/redoc" target="_blank" class="nav-link">ReDoc</a>
+      </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="grid-layout">
+      <!-- Left Column: Generator Workspace -->
+      <section class="card generator-card">
+        <div class="card-header">
+          <div>
+            <span class="badge-tag">Generation Studio</span>
+            <h2 class="card-title">Bulk Certificate Creation</h2>
+            <p class="card-desc">Process up to 5,000 certificates with asynchronous background queues and atomic PDF compilation.</p>
+          </div>
+        </div>
+
+        <div class="tab-container">
+          <button class="tab-btn active" id="tabJsonBtn" onclick="setTab('json')">Direct JSON Data</button>
+          <button class="tab-btn" id="tabCsvBtn" onclick="setTab('csv')">CSV Batch Upload</button>
+        </div>
+
+        <!-- Global Job Options -->
+        <div class="form-row">
+          <div class="form-group flex-2">
+            <label for="issuerNameInput">Issuing Organization / Authority</label>
+            <input type="text" id="issuerNameInput" value="Academic Certification Authority" placeholder="e.g. Stanford AI Lab">
+          </div>
+          <div class="form-group flex-1">
+            <label for="templateSelect">Design Template</label>
+            <select id="templateSelect">
+              <option value="classic">Classic Royal Gold</option>
+              <option value="modern">Modern Minimalist</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="checkbox-row">
+          <label class="custom-checkbox">
+            <input type="checkbox" id="dedupeToggle" checked>
+            <span class="checkmark"></span>
+            Auto-deduplicate duplicate emails in batch
+          </label>
+        </div>
+
+        <!-- JSON View -->
+        <div id="jsonSection" class="tab-content active">
+          <div class="form-group">
+            <div class="label-row">
+              <label for="jsonInput">Recipient Records (JSON)</label>
+              <button class="text-btn" onclick="loadSampleData()">Reload Samples</button>
+            </div>
+            <textarea id="jsonInput" rows="9" spellcheck="false"></textarea>
+          </div>
+          <button class="btn btn-primary" id="btnSubmitJson" onclick="submitJsonJob()">
+            <span class="btn-icon">⚡</span> Run Bulk Generation Job
+          </button>
+        </div>
+
+        <!-- CSV View -->
+        <div id="csvSection" class="tab-content">
+          <div class="dropzone" id="dropzone" onclick="document.getElementById('csvFileInput').click()">
+            <div class="dropzone-icon">📄</div>
+            <p class="dropzone-title">Click to select or drag &amp; drop a CSV file</p>
+            <p class="dropzone-sub">Headers required: <code>recipient_name, recipient_email, course_name, issue_date</code></p>
+            <input type="file" id="csvFileInput" accept=".csv" style="display:none" onchange="handleCsvSelected(event)">
+          </div>
+          <div id="csvFileInfo" class="file-info-badge" style="display:none;">
+            <span id="csvFileName">sample.csv</span>
+            <button class="remove-btn" onclick="clearCsvFile(event)">✕</button>
+          </div>
+          <button class="btn btn-primary" id="btnSubmitCsv" onclick="submitCsvJob()" disabled>
+            <span class="btn-icon">📁</span> Upload CSV &amp; Process Job
+          </button>
+        </div>
+
+        <!-- Live Job Monitor (HUD) -->
+        <div id="jobProgressHud" class="progress-hud" style="display: none;">
+          <div class="hud-header">
+            <div>
+              <span class="hud-label">Job Active</span>
+              <h3 id="hudJobId" class="hud-id">Job ID: ---</h3>
+            </div>
+            <div id="hudBadge" class="status-badge badge-processing">PROCESSING</div>
+          </div>
+
+          <div class="progress-bar-track">
+            <div id="hudProgressBar" class="progress-bar-fill"></div>
+          </div>
+
+          <div class="metrics-grid">
+            <div class="metric-card">
+              <span class="metric-num" id="hudTotal">0</span>
+              <span class="metric-label">Total</span>
+            </div>
+            <div class="metric-card metric-success">
+              <span class="metric-num" id="hudSuccess">0</span>
+              <span class="metric-label">Successful</span>
+            </div>
+            <div class="metric-card metric-failed">
+              <span class="metric-num" id="hudFailed">0</span>
+              <span class="metric-label">Failed</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-num" id="hudPercent">0%</span>
+              <span class="metric-label">Progress</span>
+            </div>
+          </div>
+
+          <div id="zipDownloadContainer" style="display: none; margin-top: 1rem;">
+            <a id="btnZipDownload" href="#" target="_blank" class="btn btn-accent">
+              <span>📦 Download Complete ZIP Bundle</span>
+            </a>
+          </div>
+
+          <div class="certificates-list-wrapper">
+            <h4 class="list-title">Generated Certificates</h4>
+            <div id="hudCertificatesList" class="certificates-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column: Verification & History -->
+      <section class="side-column">
+        <!-- Verification Console -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <span class="badge-tag">Security &amp; Integrity</span>
+              <h3 class="card-title">Credential Verification</h3>
+              <p class="card-desc">Verify authenticity, recipient details, and tamper-proof verification ID.</p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="verifyCodeInput">Certificate Verification Code</label>
+            <div class="input-with-button">
+              <input type="text" id="verifyCodeInput" placeholder="e.g. CERT-A1B2-C3D4">
+              <button class="btn btn-gold" onclick="verifyCredential()">Verify</button>
+            </div>
+          </div>
+
+          <div id="verificationResultBox" class="result-box" style="display: none;"></div>
+        </div>
+
+        <!-- Recent Jobs -->
+        <div class="card" style="margin-top: 1.5rem;">
+          <div class="card-header flex-between">
+            <div>
+              <span class="badge-tag">Registry</span>
+              <h3 class="card-title">Recent Jobs</h3>
+            </div>
+            <button class="text-btn" onclick="fetchRecentJobs()">↻ Refresh</button>
+          </div>
+          <div id="recentJobsList" class="recent-jobs-list">
+            <p class="muted-text">Loading recent jobs...</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>Bulk Certificate Generator &amp; Verification API • Python 3.12+ • FastAPI • ReportLab • SQLite</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

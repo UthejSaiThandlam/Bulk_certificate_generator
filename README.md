@@ -159,20 +159,37 @@ source venv/bin/activate
 
 ### 4. Install Dependencies
 ```bash
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 ```
 
-### 5. Run the Application
+### 5. Running the Backend API
+Run using `python -m uvicorn` (recommended on Windows to avoid PATH issues):
+
 ```bash
-uvicorn app.main:app --reload --port 8000
+cd backend
+python -m uvicorn app.main:app --reload --port 8000
 ```
+*(Or double-click `run_backend.bat` in the project root)*
 
-The application will start on `http://127.0.0.1:8000`.
+The API server will start on **http://127.0.0.1:8000**:
+- **Health Check**: `http://127.0.0.1:8000/health`
+- **Interactive Swagger Docs**: `http://127.0.0.1:8000/docs`
+- **ReDoc**: `http://127.0.0.1:8000/redoc`
 
-- **Web Dashboard:** `http://127.0.0.1:8000/`
-- **Interactive Swagger Docs:** `http://127.0.0.1:8000/docs`
-- **ReDoc Documentation:** `http://127.0.0.1:8000/redoc`
-- **Health Check:** `http://127.0.0.1:8000/health`
+---
+
+### 6. Running the Dedicated Frontend
+You can launch the frontend application using Python's built-in HTTP server:
+
+```bash
+cd frontend
+python -m http.server 3000
+```
+*(Or double-click `run_frontend.bat` in the project root)*
+
+Then open **http://localhost:3000** in your browser.
+
+*(You can also simply open `frontend/index.html` directly in any web browser, as it connects directly to `http://127.0.0.1:8000` via CORS).*
 
 ---
 

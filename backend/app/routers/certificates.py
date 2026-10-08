@@ -15,29 +15,34 @@ from app.schemas import (
     JobDetailResponse,
     CertificateResponse,
     VerificationResponse,
+    MAX_RECIPIENTS_LIMIT,
 )
 from app.services.certificate_generator import CertificateGenerator
 from app.services.job_processor import process_bulk_generation_job
-from app.utils.validators import validate_email_address, validate_recipient_name, validate_course_name, validate_date_string
+from app.utils.validators import validate_date_string
 
 router = APIRouter(prefix="/api/certificates", tags=["Certificates"])
 
 
 def _build_job_response(job: GenerationJob) -> JobResponse:
+    completed = job.successful + job.failed
     progress = 0.0
-    if job.total_count > 0:
-        progress = round((job.processed_count / job.total_count) * 100, 1)
+    if job.total > 0:
+        progress = round((completed / job.total) * 100, 1)
 
     zip_url = f"/api/certificates/jobs/{job.id}/download-zip" if job.zip_file_path and os.path.exists(job.zip_file_path) else None
 
     return JobResponse(
         id=job.id,
+        idempotency_key=job.idempotency_key,
         template_name=job.template_name,
         status=job.status,
-        total_count=job.total_count,
-        processed_count=job.processed_count,
-        failed_count=job.failed_count,
+        total=job.total,
+        completed=completed,
+        successful=job.successful,
+        failed=job.failed,
         progress_percentage=progress,
+        recommended_polling_interval_seconds=2,
         download_zip_url=zip_url,
         error_message=job.error_message,
         created_at=job.created_at,
@@ -58,6 +63,7 @@ def _build_certificate_response(cert: CertificateRecord) -> CertificateResponse:
         issuer_name=cert.issuer_name,
         status=cert.status,
         download_url=download_url,
+        error_message=cert.error_message,
         created_at=cert.created_at,
     )
 
@@ -66,7 +72,7 @@ def _build_certificate_response(cert: CertificateRecord) -> CertificateResponse:
     "/generate",
     response_model=JobResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    summary="Create a bulk certificate generation job via JSON",
+    summary="Create bulk certificate generation job with deduplication and idempotency",
 )
 def create_bulk_generation_job(
     request: GenerateCertificatesRequest,
@@ -75,22 +81,44 @@ def create_bulk_generation_job(
 ):
     """
     Submits a batch of recipients for certificate generation.
-    Returns 202 Accepted and processes the certificate generation asynchronously.
+    - Idempotency key supported to avoid duplicate processing.
+    - Deduplicates recipients by email if enabled.
+    - Enforces maximum batch limit (5,000 recipients).
+    - Returns HTTP 202 Accepted and processes generation in background.
     """
-    if not request.recipients:
-        raise HTTPException(status_code=400, detail="Recipients list cannot be empty")
+    # 1. Idempotency Check
+    if request.idempotency_key:
+        existing_job = db.query(GenerationJob).filter(GenerationJob.idempotency_key == request.idempotency_key).first()
+        if existing_job:
+            return _build_job_response(existing_job)
 
+    # 2. Deduplication
+    recipients_to_process = []
+    seen_emails = set()
+    for item in request.recipients:
+        email_key = item.recipient_email.lower().strip()
+        if request.deduplicate_by_email:
+            if email_key in seen_emails:
+                continue
+            seen_emails.add(email_key)
+        recipients_to_process.append(item)
+
+    if not recipients_to_process:
+        raise HTTPException(status_code=400, detail="No unique recipients found in request")
+
+    # 3. Create Job
     job = GenerationJob(
+        idempotency_key=request.idempotency_key,
         template_name=request.template_name or "classic",
         status=JobStatus.PENDING,
-        total_count=len(request.recipients),
-        processed_count=0,
-        failed_count=0,
+        total=len(recipients_to_process),
+        successful=0,
+        failed=0,
     )
     db.add(job)
     db.flush()
 
-    for item in request.recipients:
+    for item in recipients_to_process:
         cert_code = CertificateGenerator.generate_verification_code()
         cert_record = CertificateRecord(
             job_id=job.id,
@@ -100,7 +128,7 @@ def create_bulk_generation_job(
             course_name=item.course_name,
             issue_date=item.issue_date or validate_date_string(None),
             issuer_name=item.issuer_name or request.issuer_name,
-            status=CertificateStatus.SUCCESS,
+            status=CertificateStatus.PENDING,
         )
         db.add(cert_record)
 
@@ -123,6 +151,7 @@ async def upload_csv_and_generate(
     file: UploadFile = File(..., description="CSV file with recipient records"),
     template_name: str = Form("classic"),
     issuer_name: str = Form("Academic Certification Authority"),
+    deduplicate: bool = Form(True),
     background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db),
 ):
@@ -165,6 +194,7 @@ async def upload_csv_and_generate(
         )
 
     recipients: List[RecipientCreate] = []
+    seen_emails = set()
     row_errors = []
 
     for idx, row in enumerate(reader, start=1):
@@ -174,7 +204,13 @@ async def upload_csv_and_generate(
         raw_date = row.get(date_key, "").strip() if date_key else None
 
         if not raw_name and not raw_email and not raw_course:
-            continue  # skip completely blank rows
+            continue
+
+        if deduplicate:
+            clean_email = raw_email.lower()
+            if clean_email in seen_emails:
+                continue
+            seen_emails.add(clean_email)
 
         try:
             recipients.append(
@@ -198,13 +234,18 @@ async def upload_csv_and_generate(
     if not recipients:
         raise HTTPException(status_code=400, detail="No valid recipient rows found in CSV")
 
-    # Create Job
+    if len(recipients) > MAX_RECIPIENTS_LIMIT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Exceeded maximum recipient limit of {MAX_RECIPIENTS_LIMIT} per job. Found {len(recipients)} rows.",
+        )
+
     job = GenerationJob(
         template_name=template_name,
         status=JobStatus.PENDING,
-        total_count=len(recipients),
-        processed_count=0,
-        failed_count=0,
+        total=len(recipients),
+        successful=0,
+        failed=0,
     )
     db.add(job)
     db.flush()
@@ -219,7 +260,7 @@ async def upload_csv_and_generate(
             course_name=item.course_name,
             issue_date=item.issue_date,
             issuer_name=item.issuer_name or issuer_name,
-            status=CertificateStatus.SUCCESS,
+            status=CertificateStatus.PENDING,
         )
         db.add(cert_record)
 
@@ -229,7 +270,6 @@ async def upload_csv_and_generate(
     if background_tasks:
         background_tasks.add_task(process_bulk_generation_job, job.id)
     else:
-        # Fallback sync execution if no background tasks instance
         process_bulk_generation_job(job.id)
 
     return _build_job_response(job)
@@ -238,7 +278,7 @@ async def upload_csv_and_generate(
 @router.get(
     "/jobs",
     response_model=List[JobResponse],
-    summary="List all certificate generation jobs",
+    summary="List recent certificate generation jobs",
 )
 def list_jobs(
     limit: int = Query(20, ge=1, le=100),
@@ -252,7 +292,7 @@ def list_jobs(
 @router.get(
     "/jobs/{job_id}",
     response_model=JobDetailResponse,
-    summary="Get generation job status and certificates",
+    summary="Get generation job status, progress, and individual certificates",
 )
 def get_job_status(job_id: str, db: Session = Depends(get_db)):
     """Check the real-time status and progress of a bulk generation job."""
@@ -306,8 +346,8 @@ def download_single_certificate(certificate_id: str, db: Session = Depends(get_d
     if not cert.file_path or not os.path.exists(cert.file_path):
         raise HTTPException(status_code=404, detail="Certificate file has not been generated yet or was removed")
 
-    safe_name = "".join(c for c in cert.recipient_name if c.isalnum() or c in ("-", "_")).strip()
-    download_filename = f"Certificate_{cert.certificate_code}_{safe_name}.pdf"
+    clean_name = "".join(c for c in cert.recipient_name if c.isalnum() or c in ("-", "_")).strip()
+    download_filename = f"Certificate_{cert.certificate_code}_{clean_name}.pdf"
     return FileResponse(
         path=cert.file_path,
         media_type="application/pdf",
@@ -325,10 +365,10 @@ def verify_certificate(certificate_code: str, db: Session = Depends(get_db)):
     Public verification endpoint to authenticate a certificate code.
     Used by employers or third parties to check credential validity.
     """
+    from datetime import datetime, timezone
+
     cleaned_code = certificate_code.strip().upper()
     cert = db.query(CertificateRecord).filter(CertificateRecord.certificate_code == cleaned_code).first()
-
-    from datetime import datetime, timezone
 
     if not cert:
         return VerificationResponse(
@@ -341,7 +381,7 @@ def verify_certificate(certificate_code: str, db: Session = Depends(get_db)):
     download_url = f"/api/certificates/{cert.id}/download" if cert.file_path and os.path.exists(cert.file_path) else None
 
     return VerificationResponse(
-        is_valid=True,
+        is_valid=(cert.status == CertificateStatus.SUCCESS),
         certificate_code=cert.certificate_code,
         recipient_name=cert.recipient_name,
         course_name=cert.course_name,
@@ -349,4 +389,5 @@ def verify_certificate(certificate_code: str, db: Session = Depends(get_db)):
         issue_date=cert.issue_date,
         verification_timestamp=datetime.now(timezone.utc),
         download_url=download_url,
+        error_message=cert.error_message if cert.status != CertificateStatus.SUCCESS else None,
     )
