@@ -29,21 +29,4 @@ wheels/
 .coverage
 htmlcov/
 
-# Local databases & uploads
-*.sqlite
-*.sqlite3
-*.db
-generated/*
-!generated/.gitkeep
-backend/generated/*
-!backend/generated/.gitkeep
 
-# IDE & Editor
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Environment
-.env
-.env.local
