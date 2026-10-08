@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse
 from app.database import engine, Base, ensure_schema_compatibility
 from app.routers import certificates
 from app.services.certificate_generator import CertificateGenerator
-from app.services.job_processor import resume_interrupted_jobs
+from app.services.job_processor import resume_interrupted_jobs, sync_existing_generated_folders
 
 
 @asynccontextmanager
@@ -28,6 +28,9 @@ async def lifespan(app: FastAPI):
     # 2. Crash recovery: resume any jobs interrupted if server restarted unexpectedly
     resume_interrupted_jobs()
 
+    # 3. Synchronize any generated folders on disk into the database registry
+    sync_existing_generated_folders(base_dir)
+
     yield
 
 
@@ -43,10 +46,17 @@ app = FastAPI(
 # CORS Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "*",
+    ],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Include Routers

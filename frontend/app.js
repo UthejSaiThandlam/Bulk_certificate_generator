@@ -1,4 +1,6 @@
-const API_BASE = window.location.port === "8000" ? "" : "http://127.0.0.1:8000";
+const API_BASE = window.location.port === "8000"
+  ? ""
+  : `${window.location.protocol}//${window.location.hostname || "localhost"}:8000`;
 
 let pollInterval = null;
 let selectedCsvFile = null;

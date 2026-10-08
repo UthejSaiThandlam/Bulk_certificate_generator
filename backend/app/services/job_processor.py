@@ -135,3 +135,103 @@ def resume_interrupted_jobs() -> int:
         return resumed_count
     finally:
         db.close()
+
+
+def sync_existing_generated_folders(base_dir: str | None = None) -> int:
+    """
+    Scans the 'generated/' directory for existing generated certificates
+    and ensures they are indexed in SQLite so users can see, download, and verify them.
+    """
+    if not base_dir:
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    generated_dir = os.path.join(base_dir, "generated")
+    if not os.path.exists(generated_dir):
+        return 0
+
+    import re
+    import pymupdf
+
+    db = SessionLocal()
+    imported_jobs = 0
+
+    try:
+        for entry in os.listdir(generated_dir):
+            folder_path = os.path.join(generated_dir, entry)
+            if not os.path.isdir(folder_path):
+                continue
+
+            job_id = entry
+            existing_job = db.query(GenerationJob).filter(GenerationJob.id == job_id).first()
+            if existing_job:
+                continue
+
+            # Find PDFs in this folder
+            pdf_files = [f for f in os.listdir(folder_path) if f.lower().endswith(".pdf") and not f.startswith("startup_check")]
+            if not pdf_files:
+                continue
+
+            # Find ZIP if present
+            zip_files = [f for f in os.listdir(folder_path) if f.lower().endswith(".zip")]
+            zip_path = os.path.abspath(os.path.join(folder_path, zip_files[0])) if zip_files else None
+
+            # Create GenerationJob record
+            job = GenerationJob(
+                id=job_id,
+                template_name="classic",
+                status=JobStatus.COMPLETED,
+                total=len(pdf_files),
+                successful=len(pdf_files),
+                failed=0,
+                zip_file_path=zip_path,
+                created_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(timezone.utc),
+            )
+            db.add(job)
+            db.flush()
+
+            for pdf_name in pdf_files:
+                pdf_path = os.path.abspath(os.path.join(folder_path, pdf_name))
+                cert_code_match = re.search(r"CERT-[A-Z0-9]+-[A-Z0-9]+", pdf_name)
+                cert_code = cert_code_match.group(0) if cert_code_match else f"CERT-{job_id[:4].upper()}-{pdf_name[:4].upper()}"
+
+                recipient_name = "Certificate Recipient"
+                course_name = "Professional Certification"
+                issuer_name = "Academic Certification Authority"
+
+                try:
+                    doc = pymupdf.open(pdf_path)
+                    meta = doc.metadata or {}
+                    if meta.get("title") and "Certificate -" in meta["title"]:
+                        recipient_name = meta["title"].replace("Certificate -", "").strip()
+                    if meta.get("subject"):
+                        course_name = meta["subject"].strip()
+                    if meta.get("author"):
+                        issuer_name = meta["author"].strip()
+                    doc.close()
+                except Exception:
+                    parts = pdf_name.replace(".pdf", "").split("_")
+                    if len(parts) >= 2:
+                        recipient_name = parts[1]
+
+                existing_cert = db.query(CertificateRecord).filter(CertificateRecord.certificate_code == cert_code).first()
+                if not existing_cert:
+                    cert_rec = CertificateRecord(
+                        job_id=job.id,
+                        certificate_code=cert_code,
+                        recipient_name=recipient_name,
+                        recipient_email=f"{''.join(c for c in recipient_name if c.isalnum()).lower()}@example.com",
+                        course_name=course_name,
+                        issue_date="2026-10-08",
+                        issuer_name=issuer_name,
+                        status=CertificateStatus.SUCCESS,
+                        file_path=pdf_path,
+                    )
+                    db.add(cert_rec)
+
+            db.commit()
+            imported_jobs += 1
+
+        return imported_jobs
+    finally:
+        db.close()
+
