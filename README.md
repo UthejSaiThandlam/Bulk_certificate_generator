@@ -131,16 +131,7 @@ bulk-certificate-generator/
 │   │
 │   ├── generated/                      # Target storage for job folders, PDFs, and ZIP bundles
 │   ├── templates/                      # Static reference PDF template
-│   │
-│   ├── tests/
-│   │   ├── __init__.py
-│   │   ├── conftest.py                 # Test client, isolated SQLite database, and tmp_path fixtures
-│   │   ├── test_jobs.py                # Job creation, validation failure isolation, progress & idempotency
-│   │   ├── test_validation.py          # Data validation & Pydantic constraints
-│   │   ├── test_generation.py          # ReportLab PDF creation, scaling, accented characters
-│   │   ├── test_retrieval.py           # PDF download, ZIP bundle download, and verification
-│   │   └── test_file_parser.py         # CSV, TSV, JSON, XLSX file ingestion tests
-│   │
+|   |
 │   └── requirements.txt                # Backend dependencies
 │
 ├── frontend/                           # Single-page console (HTML5, CSS3, ES6 JavaScript)
