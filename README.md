@@ -1,8 +1,8 @@
-# Bulk Certificate Generator API & Engine
+# Bulk Certificate Generator API & Service
 
-A high-performance, production-ready backend service built with **Python 3.12+**, **FastAPI**, **ReportLab**, and **SQLite/SQLAlchemy** for asynchronously generating, validating, distributing, and verifying bulk credentials and certificates in PDF format.
+A robust, production-grade backend service built with **Python 3.12+**, **FastAPI**, **ReportLab**, and **SQLite/SQLAlchemy** for asynchronously generating, validating, distributing, and verifying bulk credentials and certificates in vector PDF format.
 
-Includes an **interactive web dashboard**, Swagger & ReDoc OpenAPI documentation, background batch processing, and unique cryptographic verification codes for instant authentication.
+Includes a single-page management console with live telemetry, embedded Swagger & ReDoc OpenAPI documentation, background batch processing, and unique collision-resistant verification codes with scannable QR codes.
 
 ---
 
@@ -21,8 +21,9 @@ Includes an **interactive web dashboard**, Swagger & ReDoc OpenAPI documentation
                                   │
                                   ▼
                    ┌─────────────────────────────┐
-                   │     Pydantic Validation     │
-                   │ (Names, Emails, Dates, etc.)│
+                   │    Row Validation Loop      │
+                   │ (Valid -> PENDING           │
+                   │  Invalid -> FAILED record)  │
                    └──────────────┬──────────────┘
                                   │
                                   ▼
@@ -42,7 +43,7 @@ Includes an **interactive web dashboard**, Swagger & ReDoc OpenAPI documentation
                                   ▼
                    ┌─────────────────────────────┐
                    │    Certificate Generator    │
-                   │   (ReportLab Vector Engine) │
+                   │  (ReportLab Multi-Template) │
                    └──────────────┬──────────────┘
                                   │
                   ┌───────────────┴───────────────┐
@@ -56,8 +57,8 @@ Includes an **interactive web dashboard**, Swagger & ReDoc OpenAPI documentation
                                   │
                                   ▼
                    ┌─────────────────────────────┐
-                   │   Job Status: COMPLETED     │
-                   │   (Stored in SQLite / DB)   │
+                   │  Status: COMPLETED / ERRORS │
+                   │   (Stored in SQLite WAL)    │
                    └──────────────┬──────────────┘
                                   │
                                   ▼
@@ -73,14 +74,30 @@ Includes an **interactive web dashboard**, Swagger & ReDoc OpenAPI documentation
 
 | Layer | Technology | Rationale |
 | :--- | :--- | :--- |
-| **Backend Framework** | **FastAPI** | Modern, asynchronous, high-throughput, native OpenAPI / Swagger integration. |
-| **Language** | **Python 3.12+** | Clean syntax, robust standard library, typing support. |
-| **Data Validation** | **Pydantic v2** | Strict schema validation, sanitization, and descriptive error messages. |
-| **Database & ORM** | **SQLite + SQLAlchemy 2.0** | Zero-configuration persistence, ACID transactions, robust relational schema. |
-| **Certificate Engine** | **ReportLab 5.0+** | High-precision vector graphics, print-ready 300+ DPI PDF generation without heavy external browser dependencies. |
-| **Image & Assets** | **Pillow** | Image processing, watermark embedding, and banner processing. |
-| **Async Processing** | **FastAPI BackgroundTasks** | Non-blocking asynchronous task execution with zero Redis/Celery dependency overhead. |
-| **Testing** | **Pytest** | Modular unit and integration test suite with isolated fixtures. |
+| **Backend Framework** | **FastAPI** | High-throughput asynchronous routing, native dependency injection, and automatic OpenAPI schema generation. |
+| **Language** | **Python 3.12+** | Robust standard library, static typing annotations, and broad ecosystem. |
+| **Data Validation** | **Pydantic v2 & pydantic-settings** | Strict typing, fast schema parsing, and centralized configuration settings. |
+| **Database & ORM** | **SQLite + SQLAlchemy 2.0** | Zero-configuration persistence with Write-Ahead Logging (`WAL`) mode and foreign keys enabled for concurrent read/write throughput. |
+| **PDF Generation** | **ReportLab 4.1+** | Native vector rendering, lightweight execution, sub-second compilation with zero browser/Node.js dependencies. |
+| **QR Code Engine** | **qrcode[pil]** | Real-time generation of high-contrast verification QR codes embedded directly into PDF headers. |
+| **Async Processing** | **FastAPI BackgroundTasks** | Lightweight in-process background worker execution with zero Redis/Celery infrastructure overhead. |
+| **Testing** | **Pytest** | Test suite with isolated SQLite database and temporary directory fixtures. |
+
+---
+
+## 🎨 Supported Certificate Templates
+
+The engine includes 4 pre-configured, print-ready vector templates:
+
+1. **`classic` (Royal Navy & Gold — Default)**:
+   - Tech Institute signature design with sharp angled navy polygons and metallic gold trim stripes.
+   - Top-centered Greek pillar crest, live verification QR code, italic calligraphic recipient name, and center gold medallion seal with double signature lines.
+2. **`midnight_dark` (Midnight Luxury Dark)**:
+   - Deep navy-black background with luminous gold typography, gold foil corner highlights, and high-contrast dark-mode QR code.
+3. **`vintage_crest` (Vintage Crest Parchment)**:
+   - Warm ivory parchment background with ornamental vintage guilloche borders, traditional academic typography, and gold insignia seal.
+4. **`minimal_gold` (Minimalist Modern Gold)**:
+   - Crisp modern aesthetic with refined hairline gold accents, modern typography, and clean layout.
 
 ---
 
@@ -92,203 +109,254 @@ bulk-certificate-generator/
 ├── backend/
 │   ├── app/
 │   │   ├── __init__.py
-│   │   ├── main.py                     # FastAPI application setup, CORS, lifespan & Dashboard UI
-│   │   ├── database.py                 # SQLite engine, session maker, get_db dependency
-│   │   ├── models.py                   # SQLAlchemy ORM models (GenerationJob, CertificateRecord)
-│   │   ├── schemas.py                  # Pydantic request, response, and validation schemas
+│   │   ├── config.py                   # Centralized Pydantic BaseSettings configuration
+│   │   ├── main.py                     # FastAPI application setup, CORS, lifespan & StaticFiles mount
+│   │   ├── database.py                 # SQLite WAL mode setup, session factory, get_db dependency
+│   │   ├── models.py                   # SQLAlchemy models (GenerationJob, CertificateRecord)
+│   │   ├── schemas.py                  # Pydantic schemas with row-level validation support
 │   │   │
 │   │   ├── routers/
 │   │   │   ├── __init__.py
-│   │   │   └── certificates.py         # REST endpoints (batch generate, CSV upload, status, download, verify)
+│   │   │   └── certificates.py         # REST endpoints (generate, upload, status, download, verify)
 │   │   │
 │   │   ├── services/
 │   │   │   ├── __init__.py
-│   │   │   ├── certificate_generator.py # ReportLab PDF vector rendering engine
-│   │   │   └── job_processor.py        # Asynchronous job worker & ZIP bundler
+│   │   │   ├── certificate_generator.py # ReportLab PDF canvas vector engine & multi-template generator
+│   │   │   └── job_processor.py        # Background worker, batched DB commits, recovery & ZIP bundler
 │   │   │
 │   │   └── utils/
 │   │       ├── __init__.py
-│   │       └── validators.py           # Email, recipient name, course, and date validators
-│   │
-│   ├── templates/
-│   │   └── certificate_template.pdf    # Baseline certificate sample template
+│   │       ├── file_parser.py          # CSV, TSV, JSON, XLSX ingestion & auto-header recognition
+│   │       └── validators.py           # Email, name, course, and date validation helpers
 │   │
 │   ├── generated/                      # Target storage for job folders, PDFs, and ZIP bundles
-│   │   └── .gitkeep
+│   ├── templates/                      # Static reference PDF template
 │   │
 │   ├── tests/
 │   │   ├── __init__.py
-│   │   ├── conftest.py                 # Shared test client and isolated SQLite database fixture
-│   │   ├── test_jobs.py                # Job creation, background execution, and CSV upload tests
-│   │   ├── test_validation.py          # Data validation & Pydantic schema tests
-│   │   ├── test_generation.py          # ReportLab PDF creation and verification code tests
-│   │   └── test_retrieval.py           # PDF download, ZIP download, and verification endpoint tests
+│   │   ├── conftest.py                 # Test client, isolated SQLite database, and tmp_path fixtures
+│   │   ├── test_jobs.py                # Job creation, validation failure isolation, progress & idempotency
+│   │   ├── test_validation.py          # Data validation & Pydantic constraints
+│   │   ├── test_generation.py          # ReportLab PDF creation, scaling, accented characters
+│   │   ├── test_retrieval.py           # PDF download, ZIP bundle download, and verification
+│   │   └── test_file_parser.py         # CSV, TSV, JSON, XLSX file ingestion tests
 │   │
 │   └── requirements.txt                # Backend dependencies
 │
-├── frontend/                           # Reserved for dedicated frontend apps
-├── requirements.txt                    # Root-level requirements file
-├── .gitignore                          # Git ignore rules for virtualenv, PDFs, and caches
-└── README.md                           # Complete documentation and setup guide
+├── frontend/                           # Single-page console (HTML5, CSS3, ES6 JavaScript)
+│   ├── index.html
+│   ├── styles.css
+│   └── app.js
+│
+├── requirements.txt                    # Project root dependencies
+├── .gitignore
+└── README.md
 ```
 
 ---
 
-## 🚀 Getting Started
+## 🗄 Database Structure
 
-### 1. Prerequisites
-- **Python 3.12+** installed on your system
-- `git` installed
+```mermaid
+erDiagram
+    generation_jobs ||--o{ certificates : "1 to Many (job_id)"
+    
+    generation_jobs {
+        VARCHAR(36) id PK "UUID"
+        VARCHAR(100) idempotency_key UK "Indexed, Prevents duplicate jobs"
+        VARCHAR(50) template_name "classic, midnight_dark, vintage_crest, minimal_gold"
+        VARCHAR(30) status "PENDING, PROCESSING, COMPLETED, COMPLETED_WITH_ERRORS, FAILED"
+        INTEGER total "Total rows in batch"
+        INTEGER successful "Successfully generated count"
+        INTEGER failed "Failed count"
+        VARCHAR(500) zip_file_path "Path to generated ZIP bundle"
+        TEXT error_message "Failure detail if batch fails"
+        DATETIME created_at "Timestamp"
+        DATETIME completed_at "Timestamp"
+    }
 
-### 2. Clone the Repository
-```bash
-git clone https://github.com/<your-username>/bulk-certificate-generator.git
-cd bulk-certificate-generator
+    certificates {
+        VARCHAR(36) id PK "UUID"
+        VARCHAR(36) job_id FK "References generation_jobs.id"
+        INTEGER row_index "Row order in input file (0-indexed)"
+        VARCHAR(50) certificate_code UK "Unique CERT-XXXX-XXXX (Indexed)"
+        VARCHAR(200) recipient_name "Name on certificate"
+        VARCHAR(150) recipient_email "Indexed"
+        VARCHAR(200) course_name "Course / Event title"
+        VARCHAR(50) issue_date "Formatted issuance date"
+        VARCHAR(150) issuer_name "Issuing Organization"
+        VARCHAR(20) status "PENDING, PROCESSING, SUCCESS, FAILED"
+        VARCHAR(500) file_path "Path to generated PDF"
+        TEXT error_message "Per-recipient validation or generation error"
+        TEXT raw_input "JSON copy of original input row"
+        DATETIME created_at "Timestamp"
+        DATETIME updated_at "Timestamp"
+    }
 ```
 
-### 3. Create and Activate Virtual Environment
+---
+
+## 🚀 Setup and Run Steps
+
+### 1. Prerequisites
+- **Python 3.12+** installed
+- `pip` package manager
+
+### 2. Create and Activate Virtual Environment
 ```bash
 # On Windows (PowerShell)
 python -m venv venv
-venv\Scripts\Activate.ps1
+.\venv\Scripts\Activate.ps1
 
 # On Linux / macOS
 python3 -m venv venv
 source venv/bin/activate
 ```
 
-### 4. Install Dependencies
+### 3. Install Dependencies
 ```bash
-pip install -r backend/requirements.txt
+pip install -r requirements.txt
 ```
 
-### 5. Running the Backend API
-Run using `python -m uvicorn` (recommended on Windows to avoid PATH issues):
+### 4. Run the API Server
+Run Uvicorn from the `backend` directory:
 
 ```bash
 cd backend
 python -m uvicorn app.main:app --reload --port 8000
 ```
-*(Or double-click `run_backend.bat` in the project root)*
 
-The API server will start on **http://127.0.0.1:8000**:
+The API and static console will be available at:
+- **Interactive UI Dashboard**: `http://127.0.0.1:8000/` (or `http://localhost:3000` when running frontend separately)
 - **Health Check**: `http://127.0.0.1:8000/health`
-- **Interactive Swagger Docs**: `http://127.0.0.1:8000/docs`
-- **ReDoc**: `http://127.0.0.1:8000/redoc`
+- **Interactive Swagger Documentation**: `http://127.0.0.1:8000/docs`
+- **ReDoc Documentation**: `http://127.0.0.1:8000/redoc`
 
 ---
 
-### 6. Running the Dedicated Frontend
-You can launch the frontend application using Python's built-in HTTP server:
+## 🧪 How to Run the Tests
+
+Execute the complete test suite from the `backend` directory:
 
 ```bash
-cd frontend
-python -m http.server 3000
+cd backend
+python -m pytest -v
 ```
-*(Or double-click `run_frontend.bat` in the project root)*
 
-Then open **http://localhost:3000** in your browser.
-
-*(You can also simply open `frontend/index.html` directly in any web browser, as it connects directly to `http://127.0.0.1:8000` via CORS).*
+The test suite validates 6 core functional areas:
+1. **Creating a Job**: Validates submitting jobs via JSON and file uploads.
+2. **Validation**: Email formats, name constraints, date normalization, and row-level validation isolation (invalid rows recorded as `FAILED` without failing the batch).
+3. **Generation**: ReportLab PDF canvas compilation, font scaling, accented Latin characters (NFC), and vector star drawings.
+4. **Progress Tracking**: Progress percentages, completed/total counts, and state transitions.
+5. **Individual Certificate Failure Isolation**: Simulates single-certificate failure and verifies the batch completes with `COMPLETED_WITH_ERRORS`.
+6. **Retrieval**: Downloading single certificate PDFs, downloading ZIP archives, and authenticating codes against the public verification endpoint.
 
 ---
 
-## 📡 API Reference
+## 📡 API Reference & cURL Examples
 
-### 1. Submit Bulk Generation Job (JSON)
-- **Endpoint:** `POST /api/certificates/generate`
-- **Status Code:** `202 Accepted`
-- **Request Body:**
-```json
-{
-  "template_name": "classic",
-  "issuer_name": "Academic Certification Authority",
-  "recipients": [
-    {
-      "recipient_name": "Alice Johnson",
-      "recipient_email": "alice@example.com",
-      "course_name": "Distributed Systems Architecture",
-      "issue_date": "2025-06-15"
-    },
-    {
-      "recipient_name": "Bob Dylan",
-      "recipient_email": "bob@example.com",
-      "course_name": "Modern Cloud Computing",
-      "issue_date": "2025-06-15"
-    }
-  ]
-}
+### 1. Submit a Bulk Generation Job (JSON)
+One bad recipient row will **not** block the batch with a 422 error; valid rows become `PENDING` and invalid rows become `FAILED`.
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/certificates/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "template_name": "classic",
+    "issuer_name": "TECH INSTITUTE",
+    "idempotency_key": "batch-2025-q2-001",
+    "deduplicate_by_email": true,
+    "recipients": [
+      {
+        "recipient_name": "Carol White",
+        "recipient_email": "carol.white@techinstitute.edu",
+        "course_name": "Data Structures & Algorithms",
+        "issue_date": "10 April 2025"
+      },
+      {
+        "recipient_name": "Marcus Aurelius Reed",
+        "recipient_email": "marcus.reed@domain.com",
+        "course_name": "Advanced Distributed Systems",
+        "issue_date": "10 April 2025"
+      }
+    ]
+  }'
 ```
-- **Response:**
+
+**Response (`202 Accepted`):**
 ```json
 {
   "id": "3b29c9fe-1763-4416-b8cb-4f40f287e07a",
+  "idempotency_key": "batch-2025-q2-001",
   "template_name": "classic",
   "status": "PENDING",
-  "total_count": 2,
-  "processed_count": 0,
-  "failed_count": 0,
+  "total": 2,
+  "completed": 0,
+  "successful": 0,
+  "failed": 0,
   "progress_percentage": 0.0,
+  "recommended_polling_interval_seconds": 2,
   "download_zip_url": null,
-  "created_at": "2025-06-15T10:00:00Z"
+  "error_message": null,
+  "created_at": "2025-04-10T10:00:00Z",
+  "completed_at": null
 }
 ```
 
 ---
 
-### 2. Submit Bulk Generation Job (Universal File Upload)
-- **Endpoint:** `POST /api/certificates/upload-file` *(or legacy `/api/certificates/upload-csv`)*
-- **Status Code:** `202 Accepted`
-- **Content-Type:** `multipart/form-data`
-- **Supported File Formats:**
-  - **Excel**: `.xlsx`, `.xls` (reads active sheet rows)
-  - **Word**: `.docx` (reads tables or text paragraphs)
-  - **PDF**: `.pdf` (extracts tabular recipient records)
-  - **CSV / TSV / TXT**: `.csv`, `.tsv`, `.txt` (comma, tab, semicolon, pipe)
-  - **JSON**: `.json` (array of recipient objects)
-- **Form Fields:**
-  - `file`: Uploaded document
-  - `issuer_name` (optional): `Global Tech Academy`
-  - `template_name` (optional): `classic`
-  - `deduplicate` (optional): `true`
+### 2. Submit Bulk Generation Job (File Upload)
+Upload roster files in **Excel (.xlsx, .xls)**, **CSV (.csv)**, **TSV (.tsv)**, or **JSON (.json)**:
 
-**Automatic Header Recognition:**
-The engine automatically detects variations for required columns:
-- **Name**: `recipient_name`, `name`, `full_name`, `student_name`, `participant_name`
-- **Email**: `recipient_email`, `email`, `email_address`, `mail`
-- **Course**: `course_name`, `course`, `program`, `training`, `certification`
-- **Date**: `issue_date`, `date`, `completion_date`
+```bash
+curl -X POST http://127.0.0.1:8000/api/certificates/upload-file \
+  -F "file=@recipients.xlsx" \
+  -F "issuer_name=TECH INSTITUTE" \
+  -F "template_name=classic" \
+  -F "deduplicate=true"
+```
 
 ---
 
-### 3. Check Job Status & Retrieve Certificates
-- **Endpoint:** `GET /api/certificates/jobs/{job_id}`
-- **Response:**
+### 3. Check Job Status & Counts
+Poll job progress, summary metrics, and generated records:
+
+```bash
+curl http://127.0.0.1:8000/api/certificates/jobs/3b29c9fe-1763-4416-b8cb-4f40f287e07a
+```
+
+**Response (`200 OK`):**
 ```json
 {
   "id": "3b29c9fe-1763-4416-b8cb-4f40f287e07a",
+  "idempotency_key": "batch-2025-q2-001",
   "template_name": "classic",
   "status": "COMPLETED",
-  "total_count": 2,
-  "processed_count": 2,
-  "failed_count": 0,
+  "total": 2,
+  "completed": 2,
+  "successful": 2,
+  "failed": 0,
   "progress_percentage": 100.0,
+  "recommended_polling_interval_seconds": 2,
   "download_zip_url": "/api/certificates/jobs/3b29c9fe-1763-4416-b8cb-4f40f287e07a/download-zip",
-  "created_at": "2025-06-15T10:00:00Z",
-  "completed_at": "2025-06-15T10:00:02Z",
+  "error_message": null,
+  "created_at": "2025-04-10T10:00:00Z",
+  "completed_at": "2025-04-10T10:00:02Z",
   "certificates": [
     {
-      "id": "a901ff2a-...",
-      "job_id": "3b29c9fe-...",
-      "certificate_code": "CERT-8D2A-4F91",
+      "id": "a901ff2a-8c90-482d-8a12-1f38e217d84a",
+      "job_id": "3b29c9fe-1763-4416-b8cb-4f40f287e07a",
+      "row_index": 0,
+      "certificate_code": "CERT-6D26-BB86",
       "recipient_name": "Carol White",
-      "recipient_email": "carol@example.com",
-      "course_name": "Data Science with Python",
-      "issue_date": "2025-06-15",
-      "issuer_name": "Academic Certification Authority",
+      "recipient_email": "carol.white@techinstitute.edu",
+      "course_name": "Data Structures & Algorithms",
+      "issue_date": "10 April 2025",
+      "issuer_name": "TECH INSTITUTE",
       "status": "SUCCESS",
-      "download_url": "/api/certificates/a901ff2a-.../download",
-      "created_at": "2025-06-15T10:00:01Z"
+      "download_url": "/api/certificates/a901ff2a-8c90-482d-8a12-1f38e217d84a/download",
+      "error_message": null,
+      "created_at": "2025-04-10T10:00:01Z"
     }
   ]
 }
@@ -297,81 +365,58 @@ The engine automatically detects variations for required columns:
 ---
 
 ### 4. Download Single Certificate PDF
-- **Endpoint:** `GET /api/certificates/{certificate_id}/download`
-- **Response:** PDF Binary Stream (`application/pdf`)
+```bash
+curl -O http://127.0.0.1:8000/api/certificates/a901ff2a-8c90-482d-8a12-1f38e217d84a/download
+```
 
 ---
 
-### 5. Download All Certificates as ZIP Archive
-- **Endpoint:** `GET /api/certificates/jobs/{job_id}/download-zip`
-- **Response:** ZIP Binary Stream (`application/zip`)
+### 5. Download Bundled ZIP Archive
+```bash
+curl -O http://127.0.0.1:8000/api/certificates/jobs/3b29c9fe-1763-4416-b8cb-4f40f287e07a/download-zip
+```
 
 ---
 
 ### 6. Verify Certificate Authenticity
-- **Endpoint:** `GET /api/certificates/verify/{certificate_code}`
-- **Example:** `GET /api/certificates/verify/CERT-8D2A-4F91`
-- **Response:**
+```bash
+curl http://127.0.0.1:8000/api/certificates/verify/CERT-6D26-BB86
+```
+
+**Response (`200 OK`):**
 ```json
 {
   "is_valid": true,
-  "certificate_code": "CERT-8D2A-4F91",
+  "certificate_code": "CERT-6D26-BB86",
   "recipient_name": "Carol White",
-  "course_name": "Data Science with Python",
-  "issuer_name": "Academic Certification Authority",
-  "issue_date": "2025-06-15",
-  "verification_timestamp": "2025-06-15T10:05:00Z",
-  "download_url": "/api/certificates/a901ff2a-.../download"
+  "course_name": "Data Structures & Algorithms",
+  "issuer_name": "TECH INSTITUTE",
+  "issue_date": "10 April 2025",
+  "verification_timestamp": "2025-04-10T10:05:00Z",
+  "download_url": "/api/certificates/a901ff2a-8c90-482d-8a12-1f38e217d84a/download",
+  "error_message": null
 }
 ```
 
 ---
 
-## 🧪 Running Automated Tests
-
-Run the complete test suite with `pytest`:
-
-```bash
-python -m pytest tests/ -v
-```
-
-The test suite covers:
-- **`test_validation.py`**: Name normalization, email regex constraints, date format variations, schema validations.
-- **`test_generation.py`**: ReportLab PDF canvas output, header integrity (`%PDF-`), verification code uniqueness.
-- **`test_jobs.py`**: Background asynchronous task execution, state transitions (`PENDING` -> `COMPLETED`), CSV upload parsing.
-- **`test_retrieval.py`**: Single PDF download, ZIP bundle archive download, and public credential verification.
-
----
-
 ## 💡 Design Decisions & Trade-offs
 
-1. **Vector Drawing (ReportLab) vs HTML-to-PDF (WeasyPrint / Puppeteer)**:
-   - *Decision*: Used ReportLab canvas primitives.
-   - *Why*: ReportLab generates crisp, lightweight vector PDFs in milliseconds without requiring Chromium, Node.js, or complex C-level font dependencies on Windows/Linux environments.
+### 1. Why FastAPI `BackgroundTasks`?
+- **Rationale**: Keeps the architecture lightweight and self-contained. The client receives an immediate `202 Accepted` response while certificate generation happens in the background without needing Redis, RabbitMQ, or Celery workers.
+- **Trade-off**: `BackgroundTasks` execute in-process. If the server restarts mid-batch, in-memory execution halts.
+- **Mitigation**: Statuses are persisted transactionally in SQLite (`PENDING`, `PROCESSING`, `SUCCESS`, `FAILED`). On server startup, `resume_interrupted_jobs()` runs automatically in a non-blocking background thread, discovering any unfinished jobs and resuming them from their last uncompleted certificate.
 
-2. **FastAPI BackgroundTasks vs Celery/Redis**:
-   - *Decision*: Used FastAPI `BackgroundTasks`.
-   - *Why*: Allows immediate HTTP 202 responses while generating bulk certificates in the background with zero external infrastructure setup. The modular worker service (`process_bulk_generation_job`) is decoupled and can be plugged into Celery/RQ if multi-server scaling is required.
+### 2. Why ReportLab?
+- **Rationale**: ReportLab compiles PDF canvas primitives in pure Python. It is fast (generating a certificate in ~20 milliseconds) and produces resolution-independent vector graphics with compact file sizes (~15-30 KB per certificate).
+- **Trade-off**: Requires explicit canvas layout positioning and font management.
+- **Mitigation**: We use Unicode NFC normalization for Latin-1 accented characters (preserving names like *José* or *Müller*), dynamic font scaling to prevent long name overflows, and vector star polygons.
 
-3. **Isolated SQLite Database Architecture**:
-   - *Decision*: SQLite with SQLAlchemy 2.0.
-   - *Why*: Provides zero-friction local setup, simple file backups, and clean schema migrations, while remaining fully compatible with PostgreSQL/MySQL via an environment variable (`DATABASE_URL`).
+### 3. Per-Recipient Failure Isolation
+- **Ingestion Isolation**: Instead of a strict top-level schema rejecting an entire 1,000-row batch if one row is invalid, each recipient is validated in an individual loop. Invalid rows become persistent `FAILED` records with descriptive error messages and row indices, while valid rows proceed to generation.
+- **Generation Isolation**: During rendering, each certificate is wrapped in an individual `try/except` block. If PDF compilation fails for one recipient, that certificate is marked `FAILED` with the error captured, and the worker immediately proceeds to the next recipient. The job completes with `COMPLETED_WITH_ERRORS`.
 
-4. **Fault Tolerance per Recipient**:
-   - *Decision*: Individual certificate failure does not fail the entire batch.
-   - *Why*: Errors are caught per record, logged to the certificate table, and the remaining certificates continue processing to completion.
-
----
-
-## 📈 Learning & Future Scope
-
-### Key Learnings
-- Efficient vector rendering in ReportLab for high-aesthetic certificate layouts.
-- Decoupling long-running PDF compilation from HTTP request cycles using non-blocking background workers.
-- Handling multipart file streaming and CSV data sanitization in FastAPI.
-
-### Future Scope
-- **Dynamic Template Designer**: Drag-and-drop web designer to position text, custom signatures, and logos visually.
-- **Automated Email Dispatch**: Automated dispatch of certificates to recipient emails via SMTP/SendGrid upon job completion.
-- **QR Code Stamping**: Embedding dynamic QR codes that link directly to the `/api/certificates/verify/{code}` verification URL.
-- **Cloud Storage Integration**: Storing generated PDFs and ZIPs on AWS S3 or Google Cloud Storage with presigned download links.
+### 4. Batched Database Commits & SQLite WAL Concurrency
+- Processing large batches with individual commits creates thousands of transactions and locks SQLite.
+- The worker batches database commits every 25 certificates and at job finalization.
+- SQLite is configured with Write-Ahead Logging (`PRAGMA journal_mode=WAL`) and foreign keys enabled, allowing concurrent API reads while the worker writes.

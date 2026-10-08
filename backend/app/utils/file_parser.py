@@ -3,7 +3,6 @@ import io
 import json
 import re
 from typing import List, Dict, Any, Tuple
-from app.schemas import RecipientCreate, MAX_RECIPIENTS_LIMIT
 
 # Candidate column mappings for auto-detection
 NAME_HEADERS = {"recipient_name", "name", "full_name", "student_name", "participant_name", "candidate_name", "person_name", "learner"}
@@ -62,11 +61,11 @@ def parse_csv_or_tsv(content_bytes: bytes) -> List[Dict[str, Any]]:
     reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
     if not reader.fieldnames:
         raise ValueError("File is empty or contains no readable columns")
-    return list(reader)
+    return [row for row in reader if any(v is not None and str(v).strip() for v in row.values())]
 
 
 def parse_excel(content_bytes: bytes) -> List[Dict[str, Any]]:
-    """Parse Excel files (.xlsx, .xls) using openpyxl or pandas."""
+    """Parse Excel files (.xlsx, .xls) using openpyxl."""
     try:
         import openpyxl
         wb = openpyxl.load_workbook(io.BytesIO(content_bytes), data_only=True)
@@ -75,7 +74,7 @@ def parse_excel(content_bytes: bytes) -> List[Dict[str, Any]]:
         if not rows or len(rows) < 2:
             raise ValueError("Excel worksheet contains no data rows")
 
-        headers = [str(cell) if cell is not None else f"col_{idx}" for idx, cell in enumerate(rows[0])]
+        headers = [str(cell).strip() if cell is not None else f"col_{idx}" for idx, cell in enumerate(rows[0])]
         records = []
         for r in rows[1:]:
             if not any(r):
@@ -83,81 +82,15 @@ def parse_excel(content_bytes: bytes) -> List[Dict[str, Any]]:
             row_dict = {}
             for idx, val in enumerate(r):
                 if idx < len(headers):
-                    row_dict[headers[idx]] = str(val) if val is not None else ""
+                    row_dict[headers[idx]] = str(val).strip() if val is not None else ""
             records.append(row_dict)
         return records
     except Exception as e:
-        # Fallback to pandas
-        try:
-            import pandas as pd
-            df = pd.read_excel(io.BytesIO(content_bytes))
-            return df.fillna("").astype(str).to_dict(orient="records")
-        except Exception:
-            raise ValueError(f"Could not read Excel file: {str(e)}")
-
-
-def parse_docx(content_bytes: bytes) -> List[Dict[str, Any]]:
-    """Parse Word document (.docx) by reading tables or key-value paragraphs."""
-    import docx
-    doc = docx.Document(io.BytesIO(content_bytes))
-
-    records = []
-    # 1. Try reading tables in docx
-    for table in doc.tables:
-        if len(table.rows) >= 2:
-            headers = [cell.text.strip() for cell in table.rows[0].cells]
-            for row in table.rows[1:]:
-                row_vals = [cell.text.strip() for cell in row.cells]
-                if not any(row_vals):
-                    continue
-                row_dict = {headers[i]: row_vals[i] for i in range(min(len(headers), len(row_vals)))}
-                records.append(row_dict)
-
-    if records:
-        return records
-
-    # 2. Fallback: Parse line-by-line text paragraphs (comma/tab separated)
-    lines = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
-    if len(lines) >= 2:
-        return parse_csv_or_tsv("\n".join(lines).encode("utf-8"))
-
-    raise ValueError("No table or structured recipient records found in Word document (.docx)")
-
-
-def parse_pdf(content_bytes: bytes) -> List[Dict[str, Any]]:
-    """Extract recipient records from PDF tables or lines using pymupdf or pypdf."""
-    import pymupdf
-    doc = pymupdf.open(stream=content_bytes, filetype="pdf")
-
-    all_text_lines = []
-    for page in doc:
-        # Check for built-in tables if available
-        try:
-            tabs = page.find_tables()
-            if tabs and len(tabs.tables) > 0:
-                for tab in tabs.tables:
-                    df = tab.to_pandas()
-                    if not df.empty:
-                        return df.fillna("").astype(str).to_dict(orient="records")
-        except Exception:
-            pass
-
-        # Text extraction fallback
-        text = page.get_text("text")
-        for line in text.splitlines():
-            line_str = line.strip()
-            if line_str:
-                all_text_lines.append(line_str)
-
-    if len(all_text_lines) >= 2:
-        # Attempt to parse lines as CSV / TSV / Delimited
-        return parse_csv_or_tsv("\n".join(all_text_lines).encode("utf-8"))
-
-    raise ValueError("No tabular or comma-separated recipient records could be extracted from PDF")
+        raise ValueError(f"Could not read Excel file: {str(e)}")
 
 
 def parse_json(content_bytes: bytes) -> List[Dict[str, Any]]:
-    """Parse JSON file containing list of recipients."""
+    """Parse JSON file containing array of recipient objects."""
     data = json.loads(content_bytes.decode("utf-8", errors="replace"))
     if isinstance(data, list):
         return data
@@ -168,16 +101,15 @@ def parse_json(content_bytes: bytes) -> List[Dict[str, Any]]:
     raise ValueError("JSON file must contain an array of recipient objects")
 
 
-def extract_recipients_from_any_file(
+def extract_raw_recipients_from_file(
     filename: str,
     content_bytes: bytes,
     default_issuer: str = "Academic Certification Authority",
-    deduplicate: bool = True,
-) -> List[RecipientCreate]:
+) -> List[Dict[str, Any]]:
     """
-    Universal ingestion engine:
-    Accepts CSV, XLSX, XLS, DOCX, PDF, JSON, TSV, TXT.
-    Normalizes column headers, sanitizes values, and returns validated RecipientCreate list.
+    Ingests CSV, TSV, XLSX, or JSON files.
+    Returns normalized raw dictionary records without throwing validation errors for bad rows,
+    allowing row-by-row isolation during job creation.
     """
     ext = filename.lower().split(".")[-1]
 
@@ -185,73 +117,55 @@ def extract_recipients_from_any_file(
         raw_rows = parse_csv_or_tsv(content_bytes)
     elif ext in ["xlsx", "xls"]:
         raw_rows = parse_excel(content_bytes)
-    elif ext in ["docx", "doc"]:
-        raw_rows = parse_docx(content_bytes)
-    elif ext == "pdf":
-        raw_rows = parse_pdf(content_bytes)
     elif ext == "json":
         raw_rows = parse_json(content_bytes)
     else:
-        # Attempt auto-detection via CSV / text
         try:
             raw_rows = parse_csv_or_tsv(content_bytes)
         except Exception:
-            raise ValueError(f"Unsupported file format '.{ext}'. Supported: .csv, .xlsx, .docx, .pdf, .json, .tsv, .txt")
+            raise ValueError(f"Unsupported file format '.{ext}'. Supported: .csv, .xlsx, .json, .tsv, .txt")
 
     if not raw_rows:
-        raise ValueError(f"No records found in uploaded {ext.upper()} file")
+        raise ValueError(f"No records found in uploaded file '{filename}'")
 
-    # Identify column mappings from the first row's keys
     sample_keys = list(raw_rows[0].keys())
     name_col, email_col, course_col, date_col, issuer_col = identify_columns(sample_keys)
 
+    # If mandatory column headers cannot be mapped at all
     if not (name_col and email_col and course_col):
-        raise ValueError(
-            f"Uploaded file must contain at minimum columns for Name, Email, and Course.\n"
-            f"Detected headers: {sample_keys}.\n"
-            f"Matched: name='{name_col}', email='{email_col}', course='{course_col}'"
-        )
-
-    recipients: List[RecipientCreate] = []
-    seen_emails = set()
-    row_errors = []
-
-    for idx, row in enumerate(raw_rows, start=1):
-        raw_name = str(row.get(name_col, "") or "").strip()
-        raw_email = str(row.get(email_col, "") or "").strip()
-        raw_course = str(row.get(course_col, "") or "").strip()
-        raw_date = str(row.get(date_col, "") or "").strip() if date_col else None
-        raw_issuer = str(row.get(issuer_col, "") or "").strip() if issuer_col else default_issuer
-
-        if not raw_name and not raw_email and not raw_course:
-            continue
-
-        if deduplicate:
-            clean_email = raw_email.lower()
-            if clean_email in seen_emails:
-                continue
-            seen_emails.add(clean_email)
-
-        try:
-            recipients.append(
-                RecipientCreate(
-                    recipient_name=raw_name,
-                    recipient_email=raw_email,
-                    course_name=raw_course,
-                    issue_date=raw_date,
-                    issuer_name=raw_issuer or default_issuer,
-                )
+        # Check if already standardized
+        has_std = all(k in sample_keys for k in ["recipient_name", "recipient_email", "course_name"])
+        if not has_std:
+            raise ValueError(
+                f"Uploaded file must contain at minimum columns for Name, Email, and Course.\n"
+                f"Detected headers: {sample_keys}."
             )
-        except Exception as err:
-            row_errors.append(f"Row {idx}: {str(err)}")
 
-    if row_errors:
-        raise ValueError(f"Validation errors in file: {'; '.join(row_errors[:5])}")
+    normalized: List[Dict[str, Any]] = []
+    for row in raw_rows:
+        item = dict(row)
+        if name_col and name_col in row:
+            item["recipient_name"] = str(row[name_col] or "").strip()
+        if email_col and email_col in row:
+            item["recipient_email"] = str(row[email_col] or "").strip()
+        if course_col and course_col in row:
+            item["course_name"] = str(row[course_col] or "").strip()
+        if date_col and date_col in row:
+            item["issue_date"] = str(row[date_col] or "").strip()
+        if issuer_col and issuer_col in row:
+            item["issuer_name"] = str(row[issuer_col] or "").strip()
+        elif default_issuer:
+            item.setdefault("issuer_name", default_issuer)
+        normalized.append(item)
 
-    if not recipients:
-        raise ValueError("No valid recipient rows found after parsing and validation")
+    return normalized
 
-    if len(recipients) > MAX_RECIPIENTS_LIMIT:
-        raise ValueError(f"Exceeded maximum recipient limit of {MAX_RECIPIENTS_LIMIT} per job. Found {len(recipients)}.")
 
-    return recipients
+def extract_recipients_from_any_file(
+    filename: str,
+    content_bytes: bytes,
+    default_issuer: str = "Academic Certification Authority",
+    deduplicate: bool = True,
+) -> List[Dict[str, Any]]:
+    """Backwards-compatible wrapper returning raw normalized rows."""
+    return extract_raw_recipients_from_file(filename, content_bytes, default_issuer)

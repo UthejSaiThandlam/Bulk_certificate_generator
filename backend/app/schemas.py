@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.utils.validators import (
@@ -41,34 +41,33 @@ class RecipientCreate(BaseModel):
 
 
 class GenerateCertificatesRequest(BaseModel):
-    template_name: Optional[str] = Field(default="classic", description="Certificate design template (classic, modern)")
-    issuer_name: Optional[str] = Field(default="Academic Certification Authority", description="Name of the issuing organization")
-    idempotency_key: Optional[str] = Field(default=None, description="Optional client idempotency key to prevent duplicate jobs")
+    template_name: str = Field(default="classic", description="Certificate design template (classic, midnight_dark, vintage_crest, minimal_gold)")
+    issuer_name: Optional[str] = Field(default="TECH INSTITUTE", description="Name of the issuing organization")
+    idempotency_key: Optional[str] = Field(default=None, max_length=100, description="Optional client idempotency key to prevent duplicate jobs")
     deduplicate_by_email: bool = Field(default=True, description="Whether to automatically deduplicate recipients with identical emails within the job")
-    recipients: List[RecipientCreate] = Field(..., min_length=1, description="List of recipient details for certificate generation")
-
-    @field_validator("recipients")
-    @classmethod
-    def check_recipients_limit(cls, v: List[RecipientCreate]) -> List[RecipientCreate]:
-        if not v:
-            raise ValueError("Recipients list cannot be empty")
-        if len(v) > MAX_RECIPIENTS_LIMIT:
-            raise ValueError(f"Exceeded maximum recipient limit of {MAX_RECIPIENTS_LIMIT} per job. Received: {len(v)}")
-        return v
+    deduplicate: Optional[bool] = Field(default=None, description="Alias for deduplicate_by_email")
+    recipients: List[Any] = Field(
+        ...,
+        min_length=1,
+        max_length=MAX_RECIPIENTS_LIMIT,
+        description="List of raw recipient records to be validated individually during job ingestion",
+    )
 
 
 class CertificateResponse(BaseModel):
     id: str
     job_id: str
-    certificate_code: str
-    recipient_name: str
-    recipient_email: str
-    course_name: str
-    issue_date: str
-    issuer_name: str
+    row_index: int = 0
+    certificate_code: Optional[str] = None
+    recipient_name: Optional[str] = None
+    recipient_email: Optional[str] = None
+    course_name: Optional[str] = None
+    issue_date: Optional[str] = None
+    issuer_name: Optional[str] = None
     status: str
     download_url: Optional[str] = None
     error_message: Optional[str] = None
+    raw_input: Optional[str] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -94,6 +93,13 @@ class JobResponse(BaseModel):
 
 
 class JobDetailResponse(JobResponse):
+    certificates: List[CertificateResponse] = []
+
+
+class JobCertificatesPageResponse(BaseModel):
+    total: int
+    limit: int
+    offset: int
     certificates: List[CertificateResponse] = []
 
 

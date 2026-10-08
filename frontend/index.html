@@ -1,198 +1,689 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CertifAI — Enterprise Bulk Certificate Generator</title>
+  <title>CertifAI — Enterprise Bulk Certificate Engine</title>
+  <meta name="description"
+    content="Enterprise-grade bulk certificate generation, real-time job monitoring, and instant cryptographic verification platform.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap"
+    rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
-  <div class="glow-bg"></div>
+  <!-- Ambient background glow lights -->
+  <div class="glow-bg-primary"></div>
+  <div class="glow-bg-secondary"></div>
+
+  <!-- ── API Docs Modal Overlay ── -->
+  <div id="docsModal" class="docs-modal" style="display:none;" role="dialog" aria-modal="true"
+    aria-label="API Documentation">
+    <div class="docs-modal-header">
+      <div class="docs-title-group">
+        <span class="badge-tag">API Docs</span>
+        <span id="docsModalTitle" class="docs-modal-title">Interactive API Documentation</span>
+      </div>
+      <div class="docs-actions">
+        <button class="tab-pill" id="docsSwaggerTab" onclick="switchDocsTab('/docs', 'Swagger UI')">Swagger UI</button>
+        <button class="tab-pill" id="docsRedocTab" onclick="switchDocsTab('/redoc', 'ReDoc')">ReDoc</button>
+        <button class="docs-modal-close" id="docsCloseBtn" onclick="closeDocsModal()"
+          aria-label="Close documentation panel">✕ Close (ESC)</button>
+      </div>
+    </div>
+    <iframe id="docsIframe" class="docs-iframe" src="" title="API Documentation" loading="lazy"></iframe>
+  </div>
+
+  <!-- ── Single Certificate Preview Modal ── -->
+  <div id="certPreviewModal" class="preview-modal" style="display:none;" role="dialog" aria-modal="true"
+    aria-label="Certificate Details">
+    <div class="preview-modal-card">
+      <div class="preview-modal-header">
+        <div>
+          <span class="badge-tag">Credential Record</span>
+          <h3 id="previewRecipientName" class="preview-title">Certificate Details</h3>
+        </div>
+        <button class="docs-modal-close" onclick="closePreviewModal()">✕</button>
+      </div>
+      <div class="preview-modal-body">
+        <div class="preview-info-grid">
+          <div class="info-item">
+            <span class="info-label">Verification Code</span>
+            <span class="info-value code-highlight" id="previewCode">CERT-XXXX-XXXX</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Status</span>
+            <span class="info-value" id="previewStatusBadge">SUCCESS</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Program / Course</span>
+            <span class="info-value" id="previewCourse">---</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Recipient Email</span>
+            <span class="info-value" id="previewEmail">---</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Issuer</span>
+            <span class="info-value" id="previewIssuer">---</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Issue Date</span>
+            <span class="info-value" id="previewDate">---</span>
+          </div>
+        </div>
+        <div id="previewErrorContainer" style="display:none;" class="error-notice">
+          <span class="error-icon">⚠️</span>
+          <span id="previewErrorMsg">Error description</span>
+        </div>
+        <div class="preview-actions">
+          <a id="previewDownloadBtn" href="#" target="_blank" class="btn btn-primary">
+            <span>📥 Download PDF Certificate</span>
+          </a>
+          <button id="previewVerifyDirectBtn" class="btn btn-secondary" onclick="verifyFromModal()">
+            <span>🔍 Verify Authenticity</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <div class="app-container">
-    <!-- Navbar -->
+    <!-- ── Top Navbar ── -->
     <header class="navbar">
       <div class="brand">
         <div class="brand-icon">🎓</div>
         <div class="brand-text">
-          <h1>CertifAI</h1>
-          <span class="brand-subtitle">Bulk Certificate Generator &amp; Verification Engine</span>
+          <div class="brand-title-row">
+            <h1>CertifAI</h1>
+            <span class="version-tag">v2.4 Pro</span>
+          </div>
+          <span class="brand-subtitle">Bulk Certificate Generator &amp; Verification Platform</span>
         </div>
       </div>
+
+      <!-- Navigation Page Switcher Buttons -->
+      <nav class="nav-page-bar" aria-label="Main Navigation">
+        <button class="nav-page-btn active" id="navBtnStudio" onclick="navigateToPage('studio')">
+          <span class="nav-icon">⚡</span>
+          <span>Batch Studio</span>
+        </button>
+        <button class="nav-page-btn" id="navBtnMonitor" onclick="navigateToPage('monitor')">
+          <span class="nav-icon">📊</span>
+          <span>Live Monitor</span>
+          <span class="nav-counter" id="activeJobIndicator" style="display:none;">1</span>
+        </button>
+        <button class="nav-page-btn" id="navBtnVerify" onclick="navigateToPage('verify')">
+          <span class="nav-icon">🔍</span>
+          <span>Verify Credential</span>
+        </button>
+        <button class="nav-page-btn" id="navBtnRegistry" onclick="navigateToPage('registry')">
+          <span class="nav-icon">📋</span>
+          <span>Job Registry</span>
+        </button>
+        <button class="nav-page-btn" id="navBtnTemplates" onclick="navigateToPage('templates')">
+          <span class="nav-icon">🎨</span>
+          <span>Templates</span>
+        </button>
+      </nav>
+
+      <!-- Right Actions -->
       <div class="nav-actions">
         <div id="backendStatus" class="status-pill status-checking">
           <span class="status-dot"></span>
-          <span id="backendStatusText">Connecting to API...</span>
+          <span id="backendStatusText">API Connecting...</span>
         </div>
-        <a href="http://127.0.0.1:8000/docs" target="_blank" class="nav-link">Swagger Docs</a>
-        <a href="http://127.0.0.1:8000/redoc" target="_blank" class="nav-link">ReDoc</a>
+        <button id="navSwagger" class="btn-ghost-sm" onclick="openDocsModal('/docs', 'Swagger UI')">
+          <span>Swagger</span>
+        </button>
+        <button id="navRedoc" class="btn-ghost-sm" onclick="openDocsModal('/redoc', 'ReDoc')">
+          <span>ReDoc</span>
+        </button>
       </div>
     </header>
 
-    <!-- Main Workspace -->
-    <main class="grid-layout">
-      <!-- Left Column: Generator Workspace -->
-      <section class="card generator-card">
-        <div class="card-header">
-          <div>
-            <span class="badge-tag">Generation Studio</span>
-            <h2 class="card-title">Bulk Certificate Creation</h2>
-            <p class="card-desc">Process up to 5,000 certificates with asynchronous background queues and atomic PDF compilation.</p>
-          </div>
-        </div>
+    <!-- ── Stats Overview HUD ── -->
+    <section class="stats-ribbon">
+      <div class="stat-pill">
+        <span class="stat-pill-label">Active Engine</span>
+        <span class="stat-pill-val stat-success" id="engineStatusVal">FastAPI + ReportLab</span>
+      </div>
+      <div class="stat-pill">
+        <span class="stat-pill-label">Fault Isolation</span>
+        <span class="stat-pill-val">Per-Recipient (Non-Blocking)</span>
+      </div>
+      <div class="stat-pill">
+        <span class="stat-pill-label">Deduplication</span>
+        <span class="stat-pill-val">In-Memory Hash Ring</span>
+      </div>
+      <div class="stat-pill">
+        <span class="stat-pill-label">Recent Jobs</span>
+        <span class="stat-pill-val" id="statsJobCount">0 Jobs</span>
+      </div>
+    </section>
 
-        <div class="tab-container">
-          <button class="tab-btn active" id="tabJsonBtn" onclick="setTab('json')">Direct JSON Data</button>
-          <button class="tab-btn" id="tabCsvBtn" onclick="setTab('csv')">Upload Any File (Excel/Word/PDF/CSV/JSON)</button>
-        </div>
+    <!-- ── Multi-Page Views Container ── -->
+    <main class="page-viewport">
 
-        <!-- Global Job Options -->
-        <div class="form-row">
-          <div class="form-group flex-2">
-            <label for="issuerNameInput">Issuing Organization / Authority</label>
-            <input type="text" id="issuerNameInput" value="Academic Certification Authority" placeholder="e.g. Stanford AI Lab">
-          </div>
-          <div class="form-group flex-1">
-            <label for="templateSelect">Design Template</label>
-            <select id="templateSelect">
-              <option value="classic">Classic Royal Gold</option>
-              <option value="modern">Modern Minimalist</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="checkbox-row">
-          <label class="custom-checkbox">
-            <input type="checkbox" id="dedupeToggle" checked>
-            <span class="checkmark"></span>
-            Auto-deduplicate duplicate emails in batch
-          </label>
-        </div>
-
-        <!-- JSON View -->
-        <div id="jsonSection" class="tab-content active">
-          <div class="form-group">
-            <div class="label-row">
-              <label for="jsonInput">Recipient Records (JSON)</label>
-              <button class="text-btn" onclick="loadSampleData()">Reload Samples</button>
+      <!-- ================================================================= -->
+      <!-- PAGE 1: GENERATOR STUDIO -->
+      <!-- ================================================================= -->
+      <section id="pageStudio" class="page-view active">
+        <div class="studio-layout">
+          <!-- Left Main Card: Configuration & Input -->
+          <div class="card card-glow studio-main-card">
+            <div class="card-header flex-between">
+              <div>
+                <span class="badge-tag">Bulk Processing Engine</span>
+                <h2 class="card-title">Bulk Certificate Creation</h2>
+                <p class="card-desc">Process up to 5,000 certificates concurrently with background threads, fault
+                  isolation, and ZIP bundling.</p>
+              </div>
+              <!-- In-between page quick jump buttons -->
+              <div class="quick-nav-group">
+                <button class="btn-link-nav" onclick="navigateToPage('monitor')">📊 View Monitor →</button>
+                <button class="btn-link-nav" onclick="navigateToPage('templates')">🎨 Preview Designs →</button>
+              </div>
             </div>
-            <textarea id="jsonInput" rows="9" spellcheck="false"></textarea>
-          </div>
-          <button class="btn btn-primary" id="btnSubmitJson" onclick="submitJsonJob()">
-            <span class="btn-icon">⚡</span> Run Bulk Generation Job
-          </button>
-        </div>
 
-        <!-- Universal File View -->
-        <div id="csvSection" class="tab-content">
-          <div class="dropzone" id="dropzone" onclick="document.getElementById('csvFileInput').click()">
-            <div class="dropzone-icon">📁</div>
-            <p class="dropzone-title">Click to select or drag &amp; drop any file</p>
-            <p class="dropzone-sub">Supported formats: <strong>.xlsx, .xls, .docx, .pdf, .csv, .json, .tsv, .txt</strong></p>
-            <input type="file" id="csvFileInput" accept=".xlsx,.xls,.docx,.pdf,.csv,.json,.tsv,.txt" style="display:none" onchange="handleCsvSelected(event)">
-          </div>
-          <div id="csvFileInfo" class="file-info-badge" style="display:none;">
-            <span id="csvFileName">sample.xlsx</span>
-            <button class="remove-btn" onclick="clearCsvFile(event)">✕</button>
-          </div>
-          <button class="btn btn-primary" id="btnSubmitCsv" onclick="submitCsvJob()" disabled>
-            <span class="btn-icon">⚡</span> Ingest File &amp; Generate Certificates
-          </button>
-        </div>
-
-        <!-- Live Job Monitor (HUD) -->
-        <div id="jobProgressHud" class="progress-hud" style="display: none;">
-          <div class="hud-header">
-            <div>
-              <span class="hud-label">Job Active</span>
-              <h3 id="hudJobId" class="hud-id">Job ID: ---</h3>
+            <!-- Ingestion Method Tabs -->
+            <div class="tab-container">
+              <button class="tab-btn active" id="tabJsonBtn" onclick="setTab('json')">
+                <span>📝 Direct JSON Payload</span>
+              </button>
+              <button class="tab-btn" id="tabCsvBtn" onclick="setTab('csv')">
+                <span>📁 Upload File (Excel / CSV / JSON / TSV)</span>
+              </button>
             </div>
-            <div id="hudBadge" class="status-badge badge-processing">PROCESSING</div>
+
+            <!-- Global Job Options Row -->
+            <div class="form-row">
+              <div class="form-group flex-2">
+                <label for="issuerNameInput">Issuing Organization / Institution</label>
+                <input type="text" id="issuerNameInput" value="TECH INSTITUTE"
+                  placeholder="e.g. Stanford AI Lab, Tech Institute">
+              </div>
+              <div class="form-group flex-1">
+                <label for="templateSelect">Design Template</label>
+                <select id="templateSelect" onchange="onTemplateChanged(this.value)">
+                  <option value="classic">Royal Navy &amp; Gold (Classic)</option>
+                  <option value="midnight_dark">Midnight Luxury Dark</option>
+                  <option value="vintage_crest">Vintage Crest Parchment</option>
+                  <option value="minimal_gold">Minimalist Modern Gold</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="idempotencyKeyInput">Idempotency Key (Optional — prevents duplicate submission)</label>
+                <input type="text" id="idempotencyKeyInput"
+                  placeholder="e.g. BATCH-2025-Q2-001 (auto-generated if blank)">
+              </div>
+              <div class="form-group flex-1 align-end">
+                <label class="custom-checkbox">
+                  <input type="checkbox" id="dedupeToggle" checked>
+                  <span class="checkmark"></span>
+                  <span class="checkbox-label">Auto-deduplicate duplicate emails in batch</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Tab 1: JSON Input Section -->
+            <div id="jsonSection" class="tab-content active">
+              <div class="form-group">
+                <div class="label-row">
+                  <label for="jsonInput">Recipient Records (JSON Array)</label>
+                  <div class="json-actions">
+                    <button class="text-btn" onclick="formatJsonInput()">Format JSON</button>
+                    <button class="text-btn" onclick="loadSampleData()">Load Sample 5 Rows</button>
+                    <button class="text-btn" onclick="loadLargeSampleData()">Load 20 Rows</button>
+                  </div>
+                </div>
+                <textarea id="jsonInput" rows="10" spellcheck="false"></textarea>
+              </div>
+              <div class="action-footer">
+                <div class="action-meta">
+                  <span id="jsonRowEstimate">5 records ready for generation</span>
+                </div>
+                <button class="btn btn-primary btn-lg" id="btnSubmitJson" onclick="submitJsonJob()">
+                  <span class="btn-icon">⚡</span> Run Bulk Generation Job
+                </button>
+              </div>
+            </div>
+
+            <!-- Tab 2: File Upload Section -->
+            <div id="csvSection" class="tab-content">
+              <div class="dropzone" id="dropzone" onclick="document.getElementById('csvFileInput').click()">
+                <div class="dropzone-visual">
+                  <span class="dropzone-icon">📥</span>
+                </div>
+                <h3 class="dropzone-title">Drag &amp; Drop Spreadsheet or Data File</h3>
+                <p class="dropzone-sub">Supports Excel (<strong>.xlsx, .xls</strong>), Comma Separated
+                  (<strong>.csv</strong>), JSON (<strong>.json</strong>), Tab Separated (<strong>.tsv</strong>)</p>
+                <div class="format-chips">
+                  <span class="chip">.XLSX</span>
+                  <span class="chip">.CSV</span>
+                  <span class="chip">.JSON</span>
+                  <span class="chip">.TSV</span>
+                </div>
+                <input type="file" id="csvFileInput" accept=".xlsx,.xls,.csv,.json,.tsv,.txt" style="display:none"
+                  onchange="handleCsvSelected(event)">
+              </div>
+
+              <div id="csvFileInfo" class="file-info-badge" style="display:none;">
+                <div class="file-icon-box">📊</div>
+                <div class="file-details">
+                  <span id="csvFileName" class="file-name">data.xlsx</span>
+                  <span id="csvFileSize" class="file-meta">0 KB</span>
+                </div>
+                <button class="remove-btn" onclick="clearCsvFile(event)" title="Remove file">✕</button>
+              </div>
+
+              <div class="action-footer">
+                <div class="action-meta">
+                  <span>File parser automatically normalizes columns (name, email, course, date)</span>
+                </div>
+                <button class="btn btn-primary btn-lg" id="btnSubmitCsv" onclick="submitCsvJob()" disabled>
+                  <span class="btn-icon">⚡</span> Ingest File &amp; Generate Certificates
+                </button>
+              </div>
+            </div>
           </div>
 
-          <div class="progress-bar-track">
-            <div id="hudProgressBar" class="progress-bar-fill"></div>
-          </div>
+          <!-- Right Sidebar: Quick Verification & Active Stats -->
+          <div class="studio-sidebar">
+            <!-- Quick Credential Verification Widget -->
+            <div class="card card-sidebar">
+              <div class="card-header">
+                <div>
+                  <span class="badge-tag">Verification Portal</span>
+                  <h3 class="card-title">Quick Code Check</h3>
+                  <p class="card-desc">Verify credential authenticity instantly.</p>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="quickVerifyInput">Certificate Verification Code</label>
+                <div class="input-with-button">
+                  <input type="text" id="quickVerifyInput" placeholder="e.g. CERT-6D26-BB86">
+                  <button class="btn btn-gold" onclick="quickVerify()">Check</button>
+                </div>
+              </div>
+              <div id="quickVerifyResult" class="result-box" style="display:none;"></div>
+              <div class="card-footer-nav">
+                <button class="btn-link-nav" onclick="navigateToPage('verify')">Open Full Verification Console
+                  →</button>
+              </div>
+            </div>
 
-          <div class="metrics-grid">
-            <div class="metric-card">
-              <span class="metric-num" id="hudTotal">0</span>
-              <span class="metric-label">Total</span>
+            <!-- Template Quick Peek -->
+            <div class="card card-sidebar">
+              <div class="card-header flex-between">
+                <div>
+                  <span class="badge-tag">Template Theme</span>
+                  <h3 class="card-title">Active Style</h3>
+                </div>
+                <button class="text-btn" onclick="navigateToPage('templates')">All Styles →</button>
+              </div>
+              <div class="template-preview-card" id="templateSidebarPreview">
+                <div class="tpl-badge">Default Preset</div>
+                <h4 id="sidebarTplName">Tech Institute Classic</h4>
+                <p id="sidebarTplDesc">Royal navy angled polygons, metallic gold double borders, top centered crest,
+                  live QR code, script typography, and gold medallion seal.</p>
+                <div class="tpl-swatches">
+                  <span class="swatch" style="background:#0B1E36;" title="Navy"></span>
+                  <span class="swatch" style="background:#C8A84B;" title="Gold"></span>
+                  <span class="swatch" style="background:#FCFBF7;" title="Off White"></span>
+                </div>
+              </div>
             </div>
-            <div class="metric-card metric-success">
-              <span class="metric-num" id="hudSuccess">0</span>
-              <span class="metric-label">Successful</span>
-            </div>
-            <div class="metric-card metric-failed">
-              <span class="metric-num" id="hudFailed">0</span>
-              <span class="metric-label">Failed</span>
-            </div>
-            <div class="metric-card">
-              <span class="metric-num" id="hudPercent">0%</span>
-              <span class="metric-label">Progress</span>
-            </div>
-          </div>
-
-          <div id="zipDownloadContainer" style="display: none; margin-top: 1rem;">
-            <a id="btnZipDownload" href="#" target="_blank" class="btn btn-accent">
-              <span>📦 Download Complete ZIP Bundle</span>
-            </a>
-          </div>
-
-          <div class="certificates-list-wrapper">
-            <h4 class="list-title">Generated Certificates</h4>
-            <div id="hudCertificatesList" class="certificates-list"></div>
           </div>
         </div>
       </section>
 
-      <!-- Right Column: Verification & History -->
-      <section class="side-column">
-        <!-- Verification Console -->
-        <div class="card" style="flex-shrink: 0;">
-          <div class="card-header">
-            <div>
-              <span class="badge-tag">Security &amp; Integrity</span>
-              <h3 class="card-title">Credential Verification</h3>
-              <p class="card-desc">Verify authenticity and tamper-proof verification ID.</p>
+      <!-- ================================================================= -->
+      <!-- PAGE 2: LIVE MONITOR & HUD -->
+      <!-- ================================================================= -->
+      <section id="pageMonitor" class="page-view">
+        <div class="monitor-container">
+          <!-- Active Job HUD -->
+          <div class="card card-glow monitor-card">
+            <div class="card-header flex-between">
+              <div>
+                <span class="badge-tag">Real-Time Telemetry</span>
+                <h2 class="card-title">Generation Monitor &amp; Results</h2>
+                <p class="card-desc">Tracking live worker throughput, individual recipient status, and ZIP packaging.
+                </p>
+              </div>
+              <div class="monitor-top-actions">
+                <button class="btn btn-secondary" onclick="navigateToPage('studio')">⚡ New Batch</button>
+                <button class="btn btn-secondary" onclick="navigateToPage('registry')">📋 All Jobs</button>
+              </div>
+            </div>
+
+            <!-- No Active Job Placeholder -->
+            <div id="monitorEmptyState" class="empty-state">
+              <div class="empty-icon">📊</div>
+              <h3>No Active Generation Job Selected</h3>
+              <p>Launch a bulk generation batch from the Studio or select a past job from the Registry to view live
+                metrics.</p>
+              <div class="empty-actions">
+                <button class="btn btn-primary" onclick="navigateToPage('studio')">⚡ Go to Batch Studio</button>
+                <button class="btn btn-secondary" onclick="navigateToPage('registry')">📋 Browse Past Jobs</button>
+              </div>
+            </div>
+
+            <!-- Live HUD when job is active or loaded -->
+            <div id="jobProgressHud" class="progress-hud" style="display:none;">
+              <div class="hud-header-bar">
+                <div class="hud-id-block">
+                  <span class="hud-label">Job ID:</span>
+                  <h3 id="hudJobId" class="hud-id">---</h3>
+                </div>
+                <div class="hud-status-group">
+                  <span id="hudTemplateBadge" class="badge-pill">Template: classic</span>
+                  <div id="hudBadge" class="status-badge badge-processing">PROCESSING</div>
+                </div>
+              </div>
+
+              <!-- Animated Progress Bar -->
+              <div class="progress-section">
+                <div class="progress-labels">
+                  <span class="progress-title">Batch Progress</span>
+                  <span class="progress-pct" id="hudPercent">0%</span>
+                </div>
+                <div class="progress-bar-track">
+                  <div id="hudProgressBar" class="progress-bar-fill"></div>
+                </div>
+              </div>
+
+              <!-- Metrics Cards -->
+              <div class="metrics-grid">
+                <div class="metric-card">
+                  <div class="metric-icon-box">📦</div>
+                  <div class="metric-info">
+                    <span class="metric-num" id="hudTotal">0</span>
+                    <span class="metric-label">Total Recipients</span>
+                  </div>
+                </div>
+                <div class="metric-card metric-success">
+                  <div class="metric-icon-box">✅</div>
+                  <div class="metric-info">
+                    <span class="metric-num" id="hudSuccess">0</span>
+                    <span class="metric-label">Generated Successfully</span>
+                  </div>
+                </div>
+                <div class="metric-card metric-failed">
+                  <div class="metric-icon-box">⚠️</div>
+                  <div class="metric-info">
+                    <span class="metric-num" id="hudFailed">0</span>
+                    <span class="metric-label">Failed / Invalid</span>
+                  </div>
+                </div>
+                <div class="metric-card metric-rate">
+                  <div class="metric-icon-box">⏱️</div>
+                  <div class="metric-info">
+                    <span class="metric-num" id="hudStatusSummary">Running...</span>
+                    <span class="metric-label">Engine State</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ZIP Download Action Banner -->
+              <div id="zipDownloadContainer" class="zip-banner" style="display:none;">
+                <div class="zip-banner-info">
+                  <span class="zip-icon">📦</span>
+                  <div>
+                    <h4>Complete Certificate Archive Ready</h4>
+                    <p>All generated PDFs have been bundled into a compressed ZIP file for 1-click retrieval.</p>
+                  </div>
+                </div>
+                <a id="btnZipDownload" href="#" target="_blank" class="btn btn-accent btn-lg">
+                  <span>📥 Download Complete ZIP Bundle</span>
+                </a>
+              </div>
+
+              <!-- Generated Certificates Table with Search & Filter -->
+              <div class="certificates-section">
+                <div class="cert-header-row">
+                  <h4 class="list-title">Generated Certificate Records</h4>
+                  <div class="table-search-box">
+                    <input type="text" id="certSearchInput" placeholder="Filter by recipient, course, or code..."
+                      oninput="filterCertificatesList(this.value)">
+                  </div>
+                </div>
+                <div id="hudCertificatesList" class="certificates-list"></div>
+              </div>
             </div>
           </div>
-
-          <div class="form-group" style="margin-bottom: 0;">
-            <label for="verifyCodeInput">Certificate Verification Code</label>
-            <div class="input-with-button">
-              <input type="text" id="verifyCodeInput" placeholder="e.g. CERT-A1B2-C3D4">
-              <button class="btn btn-gold" onclick="verifyCredential()">Verify</button>
-            </div>
-          </div>
-
-          <div id="verificationResultBox" class="result-box" style="display: none;"></div>
         </div>
+      </section>
 
-        <!-- Recent Jobs -->
-        <div class="card" style="flex: 1; min-height: 0;">
-          <div class="card-header flex-between">
-            <div>
-              <span class="badge-tag">Registry</span>
-              <h3 class="card-title">Recent Jobs</h3>
+      <!-- ================================================================= -->
+      <!-- PAGE 3: CREDENTIAL VERIFIER -->
+      <!-- ================================================================= -->
+      <section id="pageVerify" class="page-view">
+        <div class="verify-container">
+          <div class="card card-glow verify-card">
+            <div class="card-header flex-between">
+              <div>
+                <span class="badge-tag">Public Registry</span>
+                <h2 class="card-title">Credential Verification Engine</h2>
+                <p class="card-desc">Verify authenticity, issuer credentials, and tamper-proof validity using
+                  cryptographic codes or QR scans.</p>
+              </div>
+              <div class="quick-nav-group">
+                <button class="btn-link-nav" onclick="navigateToPage('studio')">⚡ Go to Studio →</button>
+                <button class="btn-link-nav" onclick="navigateToPage('registry')">📋 View Registry →</button>
+              </div>
             </div>
-            <button class="text-btn" onclick="fetchRecentJobs()">↻ Refresh</button>
+
+            <div class="verify-search-panel">
+              <div class="form-group">
+                <label for="verifyCodeInput">Certificate Verification Code</label>
+                <div class="input-with-button-lg">
+                  <input type="text" id="verifyCodeInput" placeholder="Enter code (e.g. CERT-6D26-BB86)"
+                    onkeydown="if(event.key==='Enter') verifyCredential()">
+                  <button class="btn btn-gold btn-lg" onclick="verifyCredential()">
+                    <span>🔍 Verify Authenticity</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Real-time Verification Output Card -->
+            <div id="verificationResultBox" class="result-box-full" style="display:none;"></div>
           </div>
-          <div id="recentJobsList" class="recent-jobs-list">
-            <p class="muted-text">Loading recent jobs...</p>
+        </div>
+      </section>
+
+      <!-- ================================================================= -->
+      <!-- PAGE 4: JOB REGISTRY & HISTORY -->
+      <!-- ================================================================= -->
+      <section id="pageRegistry" class="page-view">
+        <div class="registry-container">
+          <div class="card card-glow">
+            <div class="card-header flex-between">
+              <div>
+                <span class="badge-tag">Audit Trail</span>
+                <h2 class="card-title">Job Registry &amp; Audit Logs</h2>
+                <p class="card-desc">Complete historical record of all bulk certificate generation runs, timestamps, and
+                  archives.</p>
+              </div>
+              <div class="registry-actions">
+                <button class="btn btn-secondary" onclick="fetchRecentJobs()">
+                  <span>↻ Refresh Registry</span>
+                </button>
+                <button class="btn btn-primary" onclick="navigateToPage('studio')">
+                  <span>⚡ Create New Batch</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Recent Jobs Table -->
+            <div id="recentJobsList" class="recent-jobs-list">
+              <div class="empty-state">
+                <p class="muted-text">Loading job history...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================= -->
+      <!-- PAGE 5: TEMPLATES SHOWCASE -->
+      <!-- ================================================================= -->
+      <section id="pageTemplates" class="page-view">
+        <div class="templates-container">
+          <div class="card card-glow">
+            <div class="card-header flex-between">
+              <div>
+                <span class="badge-tag">Design System</span>
+                <h2 class="card-title">Certificate Design Templates</h2>
+                <p class="card-desc">Vector-rendered, print-ready PDF certificate themes engineered with ReportLab
+                  canvas primitives.</p>
+              </div>
+              <button class="btn btn-primary" onclick="navigateToPage('studio')">
+                <span>⚡ Use In Generation Studio →</span>
+              </button>
+            </div>
+
+            <div class="templates-grid">
+              <!-- Template 1: Classic Navy Gold -->
+              <div class="template-card active-template">
+                <div class="tpl-card-badge">Selected Preset</div>
+                <div class="tpl-visual classic-preview">
+                  <div class="tpl-mockup-header">
+                    <span class="tpl-mini-crest">🏛️</span>
+                    <span class="tpl-mini-qr">▦</span>
+                  </div>
+                  <div class="tpl-mockup-title">CERTIFICATE OF ACHIEVEMENT</div>
+                  <div class="tpl-mockup-name">Carol White</div>
+                  <div class="tpl-mockup-course">Data Structures &amp; Algorithms</div>
+                  <div class="tpl-mockup-footer">
+                    <span class="tpl-mini-sig">✍️ Arthur</span>
+                    <span class="tpl-mini-seal">⭐</span>
+                    <span class="tpl-mini-sig">✍️ Evelyn</span>
+                  </div>
+                </div>
+                <div class="tpl-card-content">
+                  <h3>Classic Royal Navy &amp; Gold</h3>
+                  <p>Tech Institute signature design. Features sharp angled navy polygons with gold trim stripes,
+                    classical Greek pillar crest, live verification QR code, italic script recipient name, and center
+                    gold medallion seal.</p>
+                  <div class="tpl-card-footer">
+                    <button class="btn btn-sm btn-primary" onclick="selectTemplateAndGo('classic')">Select
+                      Template</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Template 2: Midnight Dark Luxury -->
+              <div class="template-card">
+                <div class="tpl-visual dark-preview">
+                  <div class="tpl-mockup-header">
+                    <span class="tpl-mini-crest">🏛️</span>
+                    <span class="tpl-mini-qr">▦</span>
+                  </div>
+                  <div class="tpl-mockup-title">CERTIFICATE OF ACHIEVEMENT</div>
+                  <div class="tpl-mockup-name">Carol White</div>
+                  <div class="tpl-mockup-course">Data Structures &amp; Algorithms</div>
+                  <div class="tpl-mockup-footer">
+                    <span class="tpl-mini-sig">✍️ Arthur</span>
+                    <span class="tpl-mini-seal">⭐</span>
+                    <span class="tpl-mini-sig">✍️ Evelyn</span>
+                  </div>
+                </div>
+                <div class="tpl-card-content">
+                  <h3>Midnight Luxury Dark</h3>
+                  <p>Dramatic deep navy-black canvas with luminous gold typography, gold foil corner highlights, glowing
+                    border accents, and high-contrast dark-mode QR code.</p>
+                  <div class="tpl-card-footer">
+                    <button class="btn btn-sm btn-secondary" onclick="selectTemplateAndGo('midnight_dark')">Select
+                      Template</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Template 3: Vintage Crest Parchment -->
+              <div class="template-card">
+                <div class="tpl-visual vintage-preview">
+                  <div class="tpl-mockup-header">
+                    <span class="tpl-mini-crest">🏛️</span>
+                    <span class="tpl-mini-qr">▦</span>
+                  </div>
+                  <div class="tpl-mockup-title">CERTIFICATE OF ACHIEVEMENT</div>
+                  <div class="tpl-mockup-name">Carol White</div>
+                  <div class="tpl-mockup-course">Data Structures &amp; Algorithms</div>
+                  <div class="tpl-mockup-footer">
+                    <span class="tpl-mini-sig">✍️ Arthur</span>
+                    <span class="tpl-mini-seal">⭐</span>
+                    <span class="tpl-mini-sig">✍️ Evelyn</span>
+                  </div>
+                </div>
+                <div class="tpl-card-content">
+                  <h3>Vintage Crest Parchment</h3>
+                  <p>Warm ivory background with ornamental vintage guilloche borders, traditional academic typography,
+                    and gold insignia seal.</p>
+                  <div class="tpl-card-footer">
+                    <button class="btn btn-sm btn-secondary" onclick="selectTemplateAndGo('vintage_crest')">Select
+                      Template</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Template 4: Minimalist Modern Gold -->
+              <div class="template-card">
+                <div class="tpl-visual minimal-preview">
+                  <div class="tpl-mockup-header">
+                    <span class="tpl-mini-crest">🏛️</span>
+                    <span class="tpl-mini-qr">▦</span>
+                  </div>
+                  <div class="tpl-mockup-title">CERTIFICATE OF ACHIEVEMENT</div>
+                  <div class="tpl-mockup-name">Carol White</div>
+                  <div class="tpl-mockup-course">Data Structures &amp; Algorithms</div>
+                  <div class="tpl-mockup-footer">
+                    <span class="tpl-mini-sig">✍️ Arthur</span>
+                    <span class="tpl-mini-seal">⭐</span>
+                    <span class="tpl-mini-sig">✍️ Evelyn</span>
+                  </div>
+                </div>
+                <div class="tpl-card-content">
+                  <h3>Minimalist Modern Gold</h3>
+                  <p>Clean editorial aesthetic with ample whitespace, refined hairline gold accents, modern typography,
+                    and crisp minimal emblem.</p>
+                  <div class="tpl-card-footer">
+                    <button class="btn btn-sm btn-secondary" onclick="selectTemplateAndGo('minimal_gold')">Select
+                      Template</button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
     </main>
 
+    <!-- ── App Footer ── -->
     <footer class="footer">
-      <p>Bulk Certificate Generator &amp; Verification API • Python 3.12+ • FastAPI • ReportLab • SQLite</p>
+      <div class="footer-content">
+        <span>CertifAI Enterprise • High-Throughput Bulk Generation • FastAPI • ReportLab • SQLite WAL</span>
+        <div class="footer-links">
+          <button class="text-btn" onclick="openDocsModal('/docs', 'Swagger UI')">Swagger API</button>
+          <span>•</span>
+          <button class="text-btn" onclick="openDocsModal('/redoc', 'ReDoc')">ReDoc Specs</button>
+          <span>•</span>
+          <button class="text-btn" onclick="navigateToPage('templates')">Design Themes</button>
+        </div>
+      </div>
     </footer>
   </div>
 
   <script src="app.js"></script>
 </body>
+
 </html>

@@ -30,7 +30,7 @@ class GenerationJob(Base):
 
     id = Column(String(36), primary_key=True, default=generate_uuid, index=True)
     idempotency_key = Column(String(100), unique=True, index=True, nullable=True)
-    template_name = Column(String(100), default="classic", nullable=False)
+    template_name = Column(String(50), default="classic", nullable=False)
     status = Column(String(30), default=JobStatus.PENDING, nullable=False, index=True)
     total = Column(Integer, default=0, nullable=False)
     successful = Column(Integer, default=0, nullable=False)
@@ -44,7 +44,7 @@ class GenerationJob(Base):
         "CertificateRecord",
         back_populates="job",
         cascade="all, delete-orphan",
-        order_by="CertificateRecord.created_at",
+        order_by="CertificateRecord.row_index",
     )
 
 
@@ -53,16 +53,23 @@ class CertificateRecord(Base):
 
     id = Column(String(36), primary_key=True, default=generate_uuid, index=True)
     job_id = Column(String(36), ForeignKey("generation_jobs.id"), nullable=False, index=True)
-    certificate_code = Column(String(50), unique=True, index=True, nullable=False)
-    recipient_name = Column(String(200), nullable=False)
-    recipient_email = Column(String(150), nullable=False, index=True)
-    course_name = Column(String(200), nullable=False)
-    issue_date = Column(String(50), nullable=False)
+    row_index = Column(Integer, default=0, nullable=False, index=True)
+    certificate_code = Column(String(50), unique=True, index=True, nullable=True)
+    recipient_name = Column(String(200), nullable=True)
+    recipient_email = Column(String(150), nullable=True, index=True)
+    course_name = Column(String(200), nullable=True)
+    issue_date = Column(String(50), nullable=True)
     issuer_name = Column(String(150), default="Academic Certification Authority", nullable=False)
     status = Column(String(20), default=CertificateStatus.PENDING, nullable=False, index=True)
     file_path = Column(String(500), nullable=True)
     error_message = Column(Text, nullable=True)
+    raw_input = Column(Text, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
 
     job = relationship("GenerationJob", back_populates="certificates")
