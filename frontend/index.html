@@ -46,7 +46,7 @@
 
         <div class="tab-container">
           <button class="tab-btn active" id="tabJsonBtn" onclick="setTab('json')">Direct JSON Data</button>
-          <button class="tab-btn" id="tabCsvBtn" onclick="setTab('csv')">CSV Batch Upload</button>
+          <button class="tab-btn" id="tabCsvBtn" onclick="setTab('csv')">Upload Any File (Excel/Word/PDF/CSV/JSON)</button>
         </div>
 
         <!-- Global Job Options -->
@@ -86,20 +86,20 @@
           </button>
         </div>
 
-        <!-- CSV View -->
+        <!-- Universal File View -->
         <div id="csvSection" class="tab-content">
           <div class="dropzone" id="dropzone" onclick="document.getElementById('csvFileInput').click()">
-            <div class="dropzone-icon">📄</div>
-            <p class="dropzone-title">Click to select or drag &amp; drop a CSV file</p>
-            <p class="dropzone-sub">Headers required: <code>recipient_name, recipient_email, course_name, issue_date</code></p>
-            <input type="file" id="csvFileInput" accept=".csv" style="display:none" onchange="handleCsvSelected(event)">
+            <div class="dropzone-icon">📁</div>
+            <p class="dropzone-title">Click to select or drag &amp; drop any file</p>
+            <p class="dropzone-sub">Supported formats: <strong>.xlsx, .xls, .docx, .pdf, .csv, .json, .tsv, .txt</strong></p>
+            <input type="file" id="csvFileInput" accept=".xlsx,.xls,.docx,.pdf,.csv,.json,.tsv,.txt" style="display:none" onchange="handleCsvSelected(event)">
           </div>
           <div id="csvFileInfo" class="file-info-badge" style="display:none;">
-            <span id="csvFileName">sample.csv</span>
+            <span id="csvFileName">sample.xlsx</span>
             <button class="remove-btn" onclick="clearCsvFile(event)">✕</button>
           </div>
           <button class="btn btn-primary" id="btnSubmitCsv" onclick="submitCsvJob()" disabled>
-            <span class="btn-icon">📁</span> Upload CSV &amp; Process Job
+            <span class="btn-icon">⚡</span> Ingest File &amp; Generate Certificates
           </button>
         </div>
 

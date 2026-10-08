@@ -141,105 +141,16 @@ def create_bulk_generation_job(
     return _build_job_response(job)
 
 
-@router.post(
-    "/upload-csv",
-    response_model=JobResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Upload CSV file for bulk certificate generation",
-)
-async def upload_csv_and_generate(
-    file: UploadFile = File(..., description="CSV file with recipient records"),
-    template_name: str = Form("classic"),
-    issuer_name: str = Form("Academic Certification Authority"),
-    deduplicate: bool = Form(True),
-    background_tasks: BackgroundTasks = None,
-    db: Session = Depends(get_db),
-):
-    """
-    Upload a CSV file containing recipient headers:
-    `recipient_name`, `recipient_email`, `course_name`, `issue_date`
-    (or `name`, `email`, `course`, `date`).
-    """
-    if not file.filename.lower().endswith(".csv"):
-        raise HTTPException(status_code=400, detail="Only CSV files (.csv) are supported")
+from app.utils.file_parser import extract_recipients_from_any_file
 
-    content = await file.read()
-    try:
-        decoded = content.decode("utf-8-sig")
-    except UnicodeDecodeError:
-        try:
-            decoded = content.decode("latin-1")
-        except Exception:
-            raise HTTPException(status_code=400, detail="Could not decode CSV file. Please ensure UTF-8 encoding.")
 
-    reader = csv.DictReader(io.StringIO(decoded))
-    if not reader.fieldnames:
-        raise HTTPException(status_code=400, detail="CSV file is empty or headers are missing")
-
-    # Normalize headers
-    header_map = {}
-    for h in reader.fieldnames:
-        clean = h.strip().lower().replace(" ", "_")
-        header_map[clean] = h
-
-    name_key = header_map.get("recipient_name") or header_map.get("name") or header_map.get("full_name")
-    email_key = header_map.get("recipient_email") or header_map.get("email")
-    course_key = header_map.get("course_name") or header_map.get("course") or header_map.get("program")
-    date_key = header_map.get("issue_date") or header_map.get("date")
-
-    if not (name_key and email_key and course_key):
-        raise HTTPException(
-            status_code=400,
-            detail=f"CSV must contain at least name, email, and course columns. Found columns: {list(reader.fieldnames)}",
-        )
-
-    recipients: List[RecipientCreate] = []
-    seen_emails = set()
-    row_errors = []
-
-    for idx, row in enumerate(reader, start=1):
-        raw_name = row.get(name_key, "").strip()
-        raw_email = row.get(email_key, "").strip()
-        raw_course = row.get(course_key, "").strip()
-        raw_date = row.get(date_key, "").strip() if date_key else None
-
-        if not raw_name and not raw_email and not raw_course:
-            continue
-
-        if deduplicate:
-            clean_email = raw_email.lower()
-            if clean_email in seen_emails:
-                continue
-            seen_emails.add(clean_email)
-
-        try:
-            recipients.append(
-                RecipientCreate(
-                    recipient_name=raw_name,
-                    recipient_email=raw_email,
-                    course_name=raw_course,
-                    issue_date=raw_date,
-                    issuer_name=issuer_name,
-                )
-            )
-        except Exception as err:
-            row_errors.append(f"Row {idx}: {str(err)}")
-
-    if row_errors:
-        raise HTTPException(
-            status_code=422,
-            detail={"message": "Validation errors found in CSV rows", "errors": row_errors[:10]},
-        )
-
-    if not recipients:
-        raise HTTPException(status_code=400, detail="No valid recipient rows found in CSV")
-
-    if len(recipients) > MAX_RECIPIENTS_LIMIT:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Exceeded maximum recipient limit of {MAX_RECIPIENTS_LIMIT} per job. Found {len(recipients)} rows.",
-        )
-
+def _create_job_from_recipients(
+    recipients: List[RecipientCreate],
+    template_name: str,
+    issuer_name: str,
+    background_tasks: BackgroundTasks,
+    db: Session,
+) -> JobResponse:
     job = GenerationJob(
         template_name=template_name,
         status=JobStatus.PENDING,
@@ -273,6 +184,67 @@ async def upload_csv_and_generate(
         process_bulk_generation_job(job.id)
 
     return _build_job_response(job)
+
+
+@router.post(
+    "/upload-file",
+    response_model=JobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Upload any file (PDF, Word DOCX, Excel XLSX/XLS, CSV, JSON, TSV, TXT) for bulk certificate generation",
+)
+async def upload_file_and_generate(
+    file: UploadFile = File(..., description="Recipient records file (.pdf, .docx, .xlsx, .csv, .json, .txt)"),
+    template_name: str = Form("classic"),
+    issuer_name: str = Form("Academic Certification Authority"),
+    deduplicate: bool = Form(True),
+    background_tasks: BackgroundTasks = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Universal Ingestion Endpoint:
+    Accepts Excel (.xlsx, .xls), Word (.docx), PDF (.pdf), CSV (.csv), JSON (.json), or TSV/TXT.
+    Automatically identifies recipient name, email, course, and date columns.
+    """
+    content = await file.read()
+    try:
+        recipients = extract_recipients_from_any_file(
+            filename=file.filename or "unknown.csv",
+            content_bytes=content,
+            default_issuer=issuer_name,
+            deduplicate=deduplicate,
+        )
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err))
+
+    return _create_job_from_recipients(recipients, template_name, issuer_name, background_tasks, db)
+
+
+@router.post(
+    "/upload-csv",
+    response_model=JobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Upload CSV file for bulk certificate generation (Backwards compatible)",
+)
+async def upload_csv_and_generate(
+    file: UploadFile = File(..., description="CSV file with recipient records"),
+    template_name: str = Form("classic"),
+    issuer_name: str = Form("Academic Certification Authority"),
+    deduplicate: bool = Form(True),
+    background_tasks: BackgroundTasks = None,
+    db: Session = Depends(get_db),
+):
+    content = await file.read()
+    try:
+        recipients = extract_recipients_from_any_file(
+            filename=file.filename or "data.csv",
+            content_bytes=content,
+            default_issuer=issuer_name,
+            deduplicate=deduplicate,
+        )
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err))
+
+    return _create_job_from_recipients(recipients, template_name, issuer_name, background_tasks, db)
 
 
 @router.get(

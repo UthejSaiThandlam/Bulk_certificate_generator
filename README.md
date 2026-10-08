@@ -162,39 +162,34 @@ source venv/bin/activate
 pip install -r backend/requirements.txt
 ```
 
-### 5. Running the Application (Rewritten & Simplified)
+### 5. Running the Backend API
+Run using `python -m uvicorn` (recommended on Windows to avoid PATH issues):
 
-You can run the servers directly from the project root using `python run.py`:
-
-#### 🌟 Option A: Run Both Backend & Frontend Simultaneously (Single Command)
 ```bash
-python run.py
+cd backend
+python -m uvicorn app.main:app --reload --port 8000
 ```
-*(Or double-click `start.bat`)*
+*(Or double-click `run_backend.bat` in the project root)*
 
-This launches:
-- **Backend API**: `http://127.0.0.1:8000` (Swagger: `/docs`)
-- **Frontend Dashboard**: `http://127.0.0.1:3000`
+The API server will start on **http://127.0.0.1:8000**:
+- **Health Check**: `http://127.0.0.1:8000/health`
+- **Interactive Swagger Docs**: `http://127.0.0.1:8000/docs`
+- **ReDoc**: `http://127.0.0.1:8000/redoc`
 
 ---
 
-#### ⚙️ Option B: Run Services Individually
-- **Run Backend Only**:
-  ```bash
-  python run.py backend
-  ```
-  *(Or: `python -m uvicorn backend.app.main:app --reload --port 8000`, or double-click `run_backend.bat`)*
+### 6. Running the Dedicated Frontend
+You can launch the frontend application using Python's built-in HTTP server:
 
-- **Run Frontend Only**:
-  ```bash
-  python run.py frontend
-  ```
-  *(Or: `python -m http.server 3000 --directory frontend`, or double-click `run_frontend.bat`)*
+```bash
+cd frontend
+python -m http.server 3000
+```
+*(Or double-click `run_frontend.bat` in the project root)*
 
-- **Run All Automated Tests**:
-  ```bash
-  python run.py test
-  ```
+Then open **http://localhost:3000** in your browser.
+
+*(You can also simply open `frontend/index.html` directly in any web browser, as it connects directly to `http://127.0.0.1:8000` via CORS).*
 
 ---
 
@@ -241,21 +236,28 @@ This launches:
 
 ---
 
-### 2. Submit Bulk Generation Job (CSV Upload)
-- **Endpoint:** `POST /api/certificates/upload-csv`
+### 2. Submit Bulk Generation Job (Universal File Upload)
+- **Endpoint:** `POST /api/certificates/upload-file` *(or legacy `/api/certificates/upload-csv`)*
 - **Status Code:** `202 Accepted`
 - **Content-Type:** `multipart/form-data`
+- **Supported File Formats:**
+  - **Excel**: `.xlsx`, `.xls` (reads active sheet rows)
+  - **Word**: `.docx` (reads tables or text paragraphs)
+  - **PDF**: `.pdf` (extracts tabular recipient records)
+  - **CSV / TSV / TXT**: `.csv`, `.tsv`, `.txt` (comma, tab, semicolon, pipe)
+  - **JSON**: `.json` (array of recipient objects)
 - **Form Fields:**
-  - `file`: CSV file (`recipients.csv`)
+  - `file`: Uploaded document
   - `issuer_name` (optional): `Global Tech Academy`
   - `template_name` (optional): `classic`
+  - `deduplicate` (optional): `true`
 
-**CSV Format Example (`recipients.csv`):**
-```csv
-recipient_name,recipient_email,course_name,issue_date
-Carol White,carol@example.com,Data Science with Python,2025-06-15
-David Black,david@example.com,Cloud DevOps & Kubernetes,2025-06-15
-```
+**Automatic Header Recognition:**
+The engine automatically detects variations for required columns:
+- **Name**: `recipient_name`, `name`, `full_name`, `student_name`, `participant_name`
+- **Email**: `recipient_email`, `email`, `email_address`, `mail`
+- **Course**: `course_name`, `course`, `program`, `training`, `certification`
+- **Date**: `issue_date`, `date`, `completion_date`
 
 ---
 

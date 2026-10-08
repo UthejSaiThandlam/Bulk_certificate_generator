@@ -1,11 +1,4 @@
 import os
-import sys
-
-# Ensure backend directory is in sys.path
-backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if backend_dir not in sys.path:
-    sys.path.insert(0, backend_dir)
-
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -343,16 +336,16 @@ def get_dashboard():
           <button class="btn-primary" onclick="submitJsonJob()">Generate Certificates (JSON)</button>
         </div>
 
-        <!-- CSV Mode Form -->
+        <!-- Universal Document Upload Form -->
         <div id="csvMode" style="display: none;">
           <div class="form-group">
-            <label>Upload CSV File (.csv)</label>
-            <input type="file" id="csvFileInput" accept=".csv">
+            <label>Upload Document (.xlsx, .docx, .pdf, .csv, .json)</label>
+            <input type="file" id="csvFileInput" accept=".xlsx,.xls,.docx,.pdf,.csv,.json,.tsv,.txt">
             <p style="font-size:0.75rem; color:var(--text-muted); margin-top:0.35rem;">
-              Headers: <code>recipient_name, recipient_email, course_name, issue_date</code>
+              Supported: Excel (.xlsx), Word (.docx), PDF (.pdf), CSV, JSON
             </p>
           </div>
-          <button class="btn-primary" onclick="submitCsvJob()">Upload &amp; Generate via CSV</button>
+          <button class="btn-primary" onclick="submitCsvJob()">Upload &amp; Generate from Document</button>
         </div>
 
         <!-- Status Progress Box -->
@@ -444,7 +437,7 @@ def get_dashboard():
     async function submitCsvJob() {
       const fileInput = document.getElementById('csvFileInput');
       if (!fileInput.files.length) {
-        alert("Please select a .csv file first");
+        alert("Please select a file first (.xlsx, .docx, .pdf, .csv, .json)");
         return;
       }
       const formData = new FormData();
@@ -453,7 +446,7 @@ def get_dashboard():
       formData.append('template_name', 'classic');
 
       try {
-        const res = await fetch('/api/certificates/upload-csv', {
+        const res = await fetch('/api/certificates/upload-file', {
           method: 'POST',
           body: formData
         });

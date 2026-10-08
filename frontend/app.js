@@ -137,7 +137,7 @@ async function submitCsvJob() {
   btn.disabled = true;
 
   try {
-    const res = await fetch(`${API_BASE}/api/certificates/upload-csv`, {
+    const res = await fetch(`${API_BASE}/api/certificates/upload-file`, {
       method: "POST",
       body: formData
     });
