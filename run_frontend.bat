@@ -1,5 +1,4 @@
 @echo off
-echo Starting CertifAI Frontend on http://localhost:3000...
-cd frontend
-python -m http.server 3000
+echo Starting CertifAI Frontend Dashboard on port 3000...
+python run.py frontend
 pause

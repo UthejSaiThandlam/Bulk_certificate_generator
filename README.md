@@ -162,34 +162,39 @@ source venv/bin/activate
 pip install -r backend/requirements.txt
 ```
 
-### 5. Running the Backend API
-Run using `python -m uvicorn` (recommended on Windows to avoid PATH issues):
+### 5. Running the Application (Rewritten & Simplified)
 
+You can run the servers directly from the project root using `python run.py`:
+
+#### 🌟 Option A: Run Both Backend & Frontend Simultaneously (Single Command)
 ```bash
-cd backend
-python -m uvicorn app.main:app --reload --port 8000
+python run.py
 ```
-*(Or double-click `run_backend.bat` in the project root)*
+*(Or double-click `start.bat`)*
 
-The API server will start on **http://127.0.0.1:8000**:
-- **Health Check**: `http://127.0.0.1:8000/health`
-- **Interactive Swagger Docs**: `http://127.0.0.1:8000/docs`
-- **ReDoc**: `http://127.0.0.1:8000/redoc`
+This launches:
+- **Backend API**: `http://127.0.0.1:8000` (Swagger: `/docs`)
+- **Frontend Dashboard**: `http://127.0.0.1:3000`
 
 ---
 
-### 6. Running the Dedicated Frontend
-You can launch the frontend application using Python's built-in HTTP server:
+#### ⚙️ Option B: Run Services Individually
+- **Run Backend Only**:
+  ```bash
+  python run.py backend
+  ```
+  *(Or: `python -m uvicorn backend.app.main:app --reload --port 8000`, or double-click `run_backend.bat`)*
 
-```bash
-cd frontend
-python -m http.server 3000
-```
-*(Or double-click `run_frontend.bat` in the project root)*
+- **Run Frontend Only**:
+  ```bash
+  python run.py frontend
+  ```
+  *(Or: `python -m http.server 3000 --directory frontend`, or double-click `run_frontend.bat`)*
 
-Then open **http://localhost:3000** in your browser.
-
-*(You can also simply open `frontend/index.html` directly in any web browser, as it connects directly to `http://127.0.0.1:8000` via CORS).*
+- **Run All Automated Tests**:
+  ```bash
+  python run.py test
+  ```
 
 ---
 
